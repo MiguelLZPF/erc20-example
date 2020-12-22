@@ -1,0 +1,59 @@
+version: "3.5"
+
+services: 
+
+  database:
+    image: mongo:latest
+    container_name: paap-mongo
+    environment:
+      - MONGO_INITDB_DATABASE=paap
+      - MONGO_INITDB_ROOT_USERNAME=root
+      - MONGO_INITDB_ROOT_PASSWORD=root
+    volumes: 
+      - ./init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
+      - ~/docker-volumes/mongodb:/data/db
+    #command: [--auth]
+    ports: 
+      #- "27017-27019:27017-27019"
+      - "27017:27017"
+    networks:
+      - paap-net
+
+  paap-back:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    #image: node:12
+    container_name: paap-back
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      #- MONGO_DB_URI=mongodb://Mongo-DB:27017/paap
+      #- JWT_SECRET=my_secret
+    volumes:
+      #- .:/usr/src/app
+      #- ./node_modules:/usr/src/app/node_modules
+      # ENVIRONMENT
+      - ./.env:/usr/src/app/.env
+      - ./.env.development:/usr/src/app/.env.development
+      - ./.env.production:/usr/src/app/.env.production
+      - ./src/contracts/artifacts:/usr/src/app/src/contracts/artifacts
+    ports:
+      - 3000:3000
+    #command: npm run start:dev
+    depends_on:
+      - database
+    networks:
+      - paap-net
+
+  # ganache:
+  #   image: trufflesuite/ganache-cli:latest
+  #   container_name: 'Ganache-CLI'
+  #   ports:
+  #     - "8545:8545"
+  #   volumes:
+  #     - ~/docker-volumes/ganache:/ganache_data
+  #   command: "--db /ganache_data --accounts 2 --secure --port 8545 --gasPrice 0 --gasLimit 9999999999999999 --hardfork byzantium"
+
+networks:
+  paap-net:

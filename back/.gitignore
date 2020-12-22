@@ -1,0 +1,5 @@
+node_modules
+dist
+.mongo-volume
+ganache_data
+.persistent.json
