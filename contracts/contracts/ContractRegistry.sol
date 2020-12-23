@@ -12,9 +12,7 @@ import {
 import {
   Create2Upgradeable as Create2
 } from "@openzeppelin/contracts-upgradeable/utils/Create2Upgradeable.sol";
-import {
-  StringsUpgradeable as S
-} from "@openzeppelin/contracts-upgradeable/utils/StringsUpgradeable.sol";
+import { Strings as S } from "./Strings.sol";
 
 /**
 * @title Contract Registry

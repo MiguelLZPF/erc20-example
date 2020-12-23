@@ -6,7 +6,7 @@ import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 /**
  * ERC20 Compliant token
  */
-contract MyToken is ERC20UpgradeSafe {
+contract MyToken is ERC20Upgradeable {
   event TokenInitialized(address indexed tokenAddr, address indexed byAccount);
 
   // 6 for good performance.// Not used in new version of OpenZeppelin: = 18; fixed

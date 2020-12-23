@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity >=0.6.0 <0.8.0;
+pragma experimental ABIEncoderV2;
 
 import {
   OwnableUpgradeable as Ownable
@@ -13,20 +14,24 @@ import "./IUsers.sol";
 contract Users is Ownable {
   // PROPERTIES
   // array for all access
-  User[] UsersA;
+  User[] usersA;
   // maps the id with array's index
   mapping(uint256 => uint256) usersI;
   // sets valid index for array
   mapping(uint256 => bool) usersV;
 
-  function newUser(
-    string memory _name,
-    string memory _password
-  ) public userInputReq(_name, _password) returns (uint256) {
+  /* function initialize() public initializer { } */
+  // FUNCTIONS
+  function newUser(string memory _name, string memory _password)
+    public
+    userInputReq(_name, _password)
+    returns (uint256)
+  {
     // create new user
     User memory user;
     user.id = usersA.length;
     user.name = _name;
+    user.password = _password;
     user.dateCreated = block.timestamp;
     user.dateModified = block.timestamp;
     // store new user in array
@@ -40,58 +45,49 @@ contract Users is Ownable {
 
   function editUser(
     uint256 _id,
-    uint256 _newNumber,
-    string memory _newDesc
-  ) public {
-    require(testsV[_id], "This test does not exist");
+    string memory _newName,
+    string memory _newPass
+  ) public userInputReq(_newName, _newPass) {
+    require(usersV[_id], "This user does not exist");
 
-    Test memory test = testsA[testsI[_id]];
-    test.number = _newNumber;
-    test.description = _newDesc;
-
-    testsA[testsI[_id]] = test;
+    User memory user = usersA[usersI[_id]];
+    user.name = _newName;
+    user.password = _newPass;
+    user.dateModified = block.timestamp;
+    // update stored user
+    usersA[usersI[_id]] = user;
   }
 
-  function deleteTest(uint256 _id) public {
-    require(testsV[_id], "This test does not exist");
+  function deleteUser(uint256 _id) public {
+    require(usersV[_id], "This user does not exist");
 
     // overwrite last element of the array to this id
-    Test memory lastTest = testsA[testsA.length - 1];
-    testsA[testsI[_id]] = lastTest;
+    User memory lastUser = usersA[usersA.length - 1];
+    usersA[usersI[_id]] = lastUser;
     // last element now is in the removed position of the array
-    testsI[lastTest.id] = testsI[_id];
+    usersI[lastUser.id] = usersI[_id];
     // remove
-    testsA.pop();
-    testsI[_id] = 0; // irrelevant
-    testsV[_id] = false; // important
+    usersA.pop();
+    usersI[_id] = 0; // irrelevant
+    usersV[_id] = false; // important
   }
 
-  function getTest(uint256 _id) public view returns (Test memory) {
-    require(testsV[_id], "Test not stored yet or not found");
-    return testsA[testsI[_id]];
+  function getUser(uint256 _id) public view returns (User memory) {
+    require(usersV[_id], "User not stored yet or not found");
+    return usersA[usersI[_id]];
   }
 
-  function getTest(uint256 _topic, uint256 _test)
-    public
-    view
-    returns (Test memory)
-  {
-    uint256 testId = testsByTopic[_topic][_test];
-    require(testsV[testId], "Test not stored yet or not found");
-    return testsA[testId];
-  }
-
-  function getTests(uint256[] memory _ids) public view returns (Test[] memory) {
-    Test[] memory tests = new Test[](_ids.length);
+  function getUsers(uint256[] memory _ids) public view returns (User[] memory) {
+    User[] memory users = new User[](_ids.length);
     for (uint256 i = 0; i < _ids.length; i++) {
-      tests[i] = getTest(_ids[i]);
+      users[i] = getUser(_ids[i]);
     }
 
-    return tests;
+    return users;
   }
 
-  function getAllTests() public view returns (Test[] memory) {
-    return testsA;
+  function getAllUsers() public view returns (User[] memory) {
+    return usersA;
   }
 
   // MODIFIERS
