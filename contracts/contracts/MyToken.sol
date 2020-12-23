@@ -1,19 +1,19 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity >=0.6.0 <0.8.0;
 
-import "./libs/token/ERC20/ERC20.sol";
-
+import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 
 /**
- * SPDX-License-Identifier: UNLICENSED
  * ERC20 Compliant token
  */
-contract PaapToken is ERC20UpgradeSafe {
+contract MyToken is ERC20UpgradeSafe {
   event TokenInitialized(address indexed tokenAddr, address indexed byAccount);
 
   // 6 for good performance.// Not used in new version of OpenZeppelin: = 18; fixed
   //uint8 constant TOKEN_DECIMALS = 6;
   uint256 constant TOKEN_INIT_AMOUNT = 10000000000000;
+  string constant TOKEN_NAME = "My Token";
+  string constant TOKEN_SYMBOL = "iob";
 
   function initialize() public initializer {
     require(TOKEN_INIT_AMOUNT > 0, "amount has o be greater than 0");
