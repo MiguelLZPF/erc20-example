@@ -9,7 +9,7 @@ import "./IUsers.sol";
 /**
  * @title iobuilders exercise
  */
-contract SecureTests is Initializable {
+contract IobManager is Initializable {
   // EVENTS
   event UserCreated(
     uint256 indexed id,
