@@ -25,11 +25,7 @@ contract ContractRegistry is Ownable {
   // EVENTS
   event Initialized(address indexed registry, address indexed owner);
   event NewType(bytes32 indexed id, string type_, bytes2 indexed version);
-  event VersionUpdated(
-    bytes32 indexed id,
-    bytes2 indexed oldVersion,
-    bytes2 indexed newVersion
-  );
+  event VersionUpdated(bytes32 indexed id, bytes2 indexed oldVersion, bytes2 indexed newVersion);
   event TypeDeleted(bytes32 indexed id);
   event Deployed(
     address proxy,
@@ -49,25 +45,20 @@ contract ContractRegistry is Ownable {
     bytes2 oldVersion,
     bytes2 newVersion
   );
-  event OwnerChanged(
-    address indexed proxy,
-    address indexed oldOwner,
-    address indexed newOwner
-  );
+  event OwnerChanged(address indexed proxy, address indexed oldOwner, address indexed newOwner);
   // =======
   // STRUCTS
   struct ContractType {
     // id that will be the keccak256 of the typeName
     bytes32 id;
     // -- types like: manager, network, host... all lower case
-    string typeName;
+    string name;
     // -- version like: 0x0102 == v1.2, 0xFFFF == v255.255
     bytes2 version;
   }
   struct ContractRecord {
     address proxy; // use as ID too
     address logic;
-    // Owner if deployed with ownable flag, else deployer
     address owner;
     string type_;
     bytes2 version;
@@ -163,11 +154,7 @@ contract ContractRegistry is Ownable {
     @param _typeName the name of the type to create
     @return a ContractType from the hashed type name
   */
-  function getTypeByName(string memory _typeName)
-    public
-    view
-    returns (ContractType memory)
-  {
+  function getTypeByName(string memory _typeName) public view returns (ContractType memory) {
     bytes32 id = S.hash(_typeName);
     return knownTypes.array[knownTypes.index[id] - 1];
   }
@@ -194,10 +181,7 @@ contract ContractRegistry is Ownable {
     uint256 index = knownTypes.index[_typeId] - 1;
     ContractType memory typeToUpdate = knownTypes.array[index];
 
-    require(
-      typeToUpdate.version < _newVersion,
-      "new version must be greater than current one"
-    );
+    require(typeToUpdate.version < _newVersion, "new version must be greater than current one");
     emit VersionUpdated(typeToUpdate.id, typeToUpdate.version, _newVersion);
     // set the new version to the type
     typeToUpdate.version = _newVersion;
@@ -219,11 +203,7 @@ contract ContractRegistry is Ownable {
     @param _typeName the name of the type to create
     @return the latest contract type version from the hashed type name
   */
-  function getVersionByName(string memory _typeName)
-    public
-    view
-    returns (bytes2)
-  {
+  function getVersionByName(string memory _typeName) public view returns (bytes2) {
     bytes32 typeId = S.hash(_typeName);
     return knownTypes.array[knownTypes.index[typeId] - 1].version;
   }
@@ -252,30 +232,24 @@ contract ContractRegistry is Ownable {
     @param _bytecode bytecode of the contract to be deployed
     @param _data the ABI encoded call to be performed after deploy
     @param _salt used to randomize deployment
-    @param _type contract type name string
+    @param _typeId contract type name string
   */
   function deployContract(
     bytes memory _bytecode,
     bytes memory _data,
     bytes32 _salt,
     //uint256 _amount,
-    string memory _type //bool _ownable
+    bytes32 _typeId
   ) external {
-    _type = S.toLower(_type);
-    bytes32 typeId = S.hash(_type);
+    ContractType memory type_ = getType(_typeId);
     address logic = Create2.deploy(0, _salt, _bytecode);
     address proxy = address(new TUP(logic, address(proxyAdm), _data));
-    // if ownable, the owner is the msg.sender
-    try Ownable(proxy).transferOwnership(_msgSender()) {} catch {}
-    emit Deployed(
-      proxy,
-      logic,
-      _msgSender(),
-      typeId,
-      _type,
-      getVersion(S.hash(_type))
-    );
-    storeRecord(proxy, logic, _type);
+    // the owner is the msg.sender
+    try Ownable(proxy).transferOwnership(_msgSender()) {} catch {
+      revert("All contracts must implement 'OwnableUpgradeable' from OpenZeppelin (or similar)");
+    }
+    emit Deployed(proxy, logic, _msgSender(), type_.id, type_.name, type_.version);
+    storeRecord(proxy, logic, type_);
   }
 
   /**
@@ -287,19 +261,18 @@ contract ContractRegistry is Ownable {
   function storeRecord(
     address _proxy,
     address _logic,
-    string memory _type
+    ContractType memory _type
   ) internal {
     // checks
-    require(isType[_type], "Contract type parameter does not exist");
-    bytes2 version = getVersionByName(_type);
+    require(isType[_type.name], "Contract type parameter does not exist");
     // create the record
     ContractRecord memory record =
       ContractRecord(
         _proxy,
         _logic,
         _msgSender(), // owner
-        _type,
-        version,
+        _type.name,
+        _type.version,
         block.timestamp,
         block.timestamp
       );
@@ -308,13 +281,9 @@ contract ContractRegistry is Ownable {
     // -- save the index + 1 = length
     records.index[_proxy] = records.array.length;
     recordsByOwner[record.owner].array.push(record);
-    recordsByOwner[record.owner].index[_proxy] = recordsByOwner[record.owner]
-      .array
-      .length;
+    recordsByOwner[record.owner].index[_proxy] = recordsByOwner[record.owner].array.length;
     recordsByType[record.type_].array.push(record);
-    recordsByType[record.type_].index[_proxy] = recordsByType[record.type_]
-      .array
-      .length;
+    recordsByType[record.type_].index[_proxy] = recordsByType[record.type_].array.length;
   }
 
   /**
@@ -334,10 +303,7 @@ contract ContractRegistry is Ownable {
     // check if contract needs to be upgraded
     bytes2 oldVersion = record.version;
     bytes2 currentVer = getVersionByName(record.type_);
-    require(
-      oldVersion < currentVer,
-      "this contract is already upgraded to the latest version"
-    );
+    require(oldVersion < currentVer, "this contract is already upgraded to the latest version");
     // save old version for event
     address oldLogic = record.logic;
 
@@ -348,15 +314,10 @@ contract ContractRegistry is Ownable {
     proxyAdm.upgrade(proxy, logic);
     // check that the proxy points to the right logic
     record.logic = proxyAdm.getProxyImplementation(proxy);
-    require(
-      record.logic != oldLogic,
-      "upgrade went wrong logic addresses cannot be the same"
-    );
+    require(record.logic != oldLogic, "upgrade went wrong logic addresses cannot be the same");
     // update contract record
     record.version = currentVer;
-    try Ownable(_proxy).owner() returns (address owner) {
-      record.owner = owner;
-    } catch {}
+    record.owner = Ownable(_proxy).owner();
     record.dateUpdated = block.timestamp;
     // save updated contract record
     records.array[index] = record;
@@ -395,10 +356,7 @@ contract ContractRegistry is Ownable {
     @param _proxy address of the proxy contract to update
   */
   function updateRecordOwner(address _proxy) public {
-    require(
-      records.index[_proxy] > 0,
-      "This contract has not been registered yet"
-    );
+    require(records.index[_proxy] > 0, "This contract has not been registered yet");
     // get the contract record
     uint256 index = records.index[_proxy] - 1;
     ContractRecord memory record = records.array[index];
@@ -419,11 +377,7 @@ contract ContractRegistry is Ownable {
     @param _proxy address of the proxy contract
     @return 
   */
-  function getRecord(address _proxy)
-    public
-    view
-    returns (ContractRecord memory)
-  {
+  function getRecord(address _proxy) public view returns (ContractRecord memory) {
     return records.array[records.index[_proxy] - 1];
   }
 

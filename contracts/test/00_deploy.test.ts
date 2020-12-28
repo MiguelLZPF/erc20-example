@@ -13,7 +13,7 @@ import {
 } from "../scripts/Blockchain";
 import { expect } from "chai";
 import { random32Bytes, toHexVersion } from "../scripts/Utils";
-import { setTypes } from "../scripts/Registry";
+import { deployWithRegistry, setTypes } from "../scripts/Registry";
 import { keccak256, toUtf8Bytes } from "ethers/lib/utils";
 
 import { ContractRegistry } from "../typechain/ContractRegistry";
@@ -34,13 +34,17 @@ let user00: Wallet;
 let user01: Wallet;
 // Specific variables
 // -- Contract Factories
-let registryFact: ContractFactory;
-let typeOneFact: ContractFactory;
-let typeTwoFact: ContractFactory;
-let typeThreeFact: ContractFactory;
+let registryFact: Promise<ContractFactory>;
+let iobManagerFact: Promise<ContractFactory>;
+let myTokenFact: Promise<ContractFactory>;
+let usersFact: Promise<ContractFactory>;
 // -- Contracts
 let proxyAdmin: Contract;
 let registry: ContractRegistry;
+let registryAdmin: ContractRegistry;
+let registryU00: ContractRegistry;
+let registryU01: ContractRegistry;
+let users: Users;
 
 describe("Registry", async function () {
   //this.timeout
@@ -68,11 +72,7 @@ describe("Registry", async function () {
       // Only takes almost the same amount of time to create only one
       let promWallets: Promise<Wallet | undefined>[] = [];
       for (let index = 0; index < WALL_NUMBER; index++) {
-        wallet = createWallet(
-          `./keystore/wallet_${index}.json`,
-          WALL_PASS,
-          WALL_ENTROPY
-        );
+        wallet = createWallet(`./keystore/wallet_${index}.json`, WALL_PASS, WALL_ENTROPY);
         promWallets.push(wallet);
       }
       wallets = (await Promise.all(promWallets)) as Wallet[];
@@ -94,6 +94,11 @@ describe("Registry", async function () {
       admin = wallets[0];
       user00 = wallets[1];
       user01 = wallets[2];
+      // get async contract factories
+      registryFact = ethers.getContractFactory("ContractRegistry");
+      iobManagerFact = ethers.getContractFactory("IobManager");
+      myTokenFact = ethers.getContractFactory("MyToken");
+      usersFact = ethers.getContractFactory("Users");
     } catch (error) {
       console.error(error);
     }
@@ -122,8 +127,10 @@ describe("Registry", async function () {
       "ContractRegistry",
       { signer: admin },
       proxyAdmin.address
-    )) as Contract;
-    registryMe = registry.connect(me!);
+    )) as ContractRegistry;
+    registryAdmin = registry.connect(admin);
+    registryU00 = registry.connect(user00);
+    registryU01 = registry.connect(user01);
 
     console.log(`Registry successfully deployed:
       - Registry logic address: ${await proxyAdmin.callStatic.getProxyImplementation(
@@ -149,9 +156,7 @@ describe("Registry", async function () {
       `Registry's owner not equal admin's address`
     );
 
-    expect(
-      await proxyAdmin.callStatic.getProxyAdmin(registry.address, GAS_OPT)
-    ).to.equal(
+    expect(await proxyAdmin.callStatic.getProxyAdmin(registry.address, GAS_OPT)).to.equal(
       proxyAdmin.address,
       `Registry's admin not equal proxy admin's address`
     );
@@ -165,22 +170,16 @@ describe("Registry", async function () {
       admin.address,
       `Event's owner not equal admin's address`
     );
-    expect(
-      (await registry.callStatic.getTypeByName("generic")).typeName
-    ).to.equal("generic", "Generic type not setted in initializer");
+    expect((await registry.callStatic.getTypeByName("generic")).name).to.equal(
+      "generic",
+      "Generic type not setted in initializer"
+    );
   });
 
-  it("Should set example type contracts project types", async () => {
-    console.log(
-      "\n ==> Setting example type contracts Types and Versions...\n"
-    );
-    //const version = toHexVersion("0.1");
+  it("Should set contract types", async () => {
+    console.log("\n ==> Setting contract Types and Versions...\n");
 
-    const receipts = await setTypes(registry, [
-      "type-one",
-      "type-two",
-      "type-three",
-    ]);
+    const receipts = await setTypes(registry, ["iob-manager", "iob-token", "iob-users"]);
 
     const newTypeEvents = (await getEvents(
       registry,
@@ -192,20 +191,32 @@ describe("Registry", async function () {
     )) as Event[];
 
     newTypeEvents.forEach((event) => {
-      console.log(`Type '${event.args?.type_}' set: 
+      console.log(`Type '${event.args?.name}' set: 
       - Id: ${event.args?.id}
-      - Name: ${event.args?.type_}
+      - Name: ${event.args?.name}
       - Version: ${event.args?.version}`);
     });
 
     console.log(await registry.getTypes(GAS_OPT));
   });
 
-  it("Should deploy type one contract", async () => {
-    console.log("\n ==> Deploying type one contract...\n");
-    //me = me!;
+  it("Should deploy Users contract", async () => {
+    console.log("\n ==> Deploying Users contract...\n");
+    
+    let users = (await deployWithRegistry(registry, "Users", {signer: admin}, "iob-users", true)) as Users;
 
-    const data = typeOneFact.interface.encodeFunctionData("initialize");
+    console.log(users.address);
+  });
+/*
+  it("Should deploy IobManager contract", async () => {
+    console.log("\n ==> Deploying IobManager contract...\n");
+
+    const data = (await iobManagerFact).interface.encodeFunctionData("initialize", []);
+  });
+  it("Should deploy myToken contract", async () => {
+    console.log("\n ==> Deploying myToken contract...\n");
+
+    const data = (await myTokenFact).interface.encodeFunctionData("initialize", []);
     const receipt = await ((await registryMe.deployContract(
       typeOneFact.bytecode,
       data,
@@ -294,7 +305,7 @@ describe("Registry", async function () {
 
   it("Should upgrade type one contract", async () => {
     console.log("\n ==> Upgradeing type one contract...\n");
-    me = me!;
+
 
     const receipt = await ((await registryMe.upgradeContract(
       typeOne.address,
@@ -329,5 +340,5 @@ describe("Registry", async function () {
       - Version: ${typeOneRecord.version}
       - Date Created: ${new Date(typeOneRecord.dateCreated * 1000)}
       - Date Updated: ${new Date(typeOneRecord.dateUpdated * 1000)}`);
-  });
+  }); */
 });

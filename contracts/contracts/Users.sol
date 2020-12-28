@@ -20,8 +20,15 @@ contract Users is Ownable {
   // sets valid index for array
   mapping(uint256 => bool) usersV;
 
-  /* function initialize() public initializer { } */
   // FUNCTIONS
+  /**
+    0. Initialize function that acts like a constructor
+  */
+  function initialize() external initializer {
+    // initializate the owner as the msg.sender through ownable contract
+    __Ownable_init();
+  }
+
   function newUser(string memory _name, string memory _password)
     public
     userInputReq(_name, _password)

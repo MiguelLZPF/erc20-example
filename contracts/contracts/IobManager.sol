@@ -3,13 +3,15 @@ pragma solidity >=0.6.0 <0.8.0;
 pragma experimental ABIEncoderV2;
 
 import "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/proxy/Initializable.sol";
+import {
+  OwnableUpgradeable as Ownable
+} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "./IUsers.sol";
 
 /**
  * @title iobuilders exercise
  */
-contract IobManager is Initializable {
+contract IobManager is Ownable {
   // EVENTS
   event UserCreated(
     uint256 indexed id,
@@ -29,6 +31,8 @@ contract IobManager is Initializable {
   // FUNCTIONS
 
   function initialize(address _users) public initializer {
+    // initializate the owner as the msg.sender through ownable contract
+    __Ownable_init();
     users = IUsers(_users);
   }
 
