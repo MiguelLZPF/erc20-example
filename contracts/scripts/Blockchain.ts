@@ -10,7 +10,7 @@ export type TransactionReceipt = providers.TransactionReceipt;
 
 // gas default options
 export const GAS_OPT = {
-  gasLimit: "0xffffffff",
+  gasLimit: 0x23c3ffff,//"0xffffffff",
   gasPrice: "0x00",
 };
 /**
@@ -45,7 +45,7 @@ export const createWallet = async (
     } else {
       // if exists, read, decrypt and add to wallets array
       const encWallet = JSON.parse(await fs.readFile(path));
-      wallet = await ethers.Wallet.fromEncryptedJson(JSON.stringify(encWallet), password);
+      wallet = await Wallet.fromEncryptedJson(JSON.stringify(encWallet), password);
       wallet = wallet.connect(ethers.provider);
     }
   } catch (error) {
@@ -61,13 +61,19 @@ export const createWallet = async (
 export const getWallets = async (path?: string) => {
   try {
     path = path ? path : "./keystore";
-    let wallets: string[] = [];
+    let readWallets: Promise<string>[] = [];
+    let encWallets: any[] = [];
 
-    (await fs.readdir(path)).forEach(async (wallet) => {
-      wallets.push(await fs.readFile(wallet));
+    const fileWallets = await fs.readdir(path);
+    for (let index = 0; index < fileWallets.length; index++) {
+      readWallets.push(fs.readFile(`${path}/${fileWallets[index]}`));
+    }
+
+    (await Promise.all(readWallets)).forEach((wallet) => {
+      encWallets.push(JSON.parse(wallet));
     });
 
-    return wallets;
+    return encWallets;
   } catch (error) {
     console.error(`ERROR: Cannot retreive wallets: ${error.stack}`);
   }
@@ -78,16 +84,24 @@ export const getWallets = async (path?: string) => {
  * @param from Signer that should have a wallet with is address
  * @param password to decript the JSON encrypted wallet
  */
-export const getWallet = async (from: Signer, password: string) => {
+export const getWallet = async (address: string, password: string) => {
   try {
-    const wallets = getWallets();
-    const address = from.getAddress();
-    (await wallets)!.forEach(async (wallet) => {
-      const walletJson = JSON.parse(wallet);
-      if (walletJson.address == (await address)) {
-        return Wallet.fromEncryptedJsonSync(wallet, password);
+    const encWallets = (await getWallets())!;
+    if (!encWallets || !encWallets[0] || !encWallets[0].address) {
+      throw new Error("No wallets found");
+    }
+
+    let decWallet: Wallet | undefined;
+    for (let index = 0; index < encWallets.length; index++) {
+      if (
+        (encWallets[index].address as string).toLowerCase() ==
+        address.slice(2, address.length).toLowerCase()
+      ) {
+        decWallet = Wallet.fromEncryptedJsonSync(JSON.stringify(encWallets[index]), password);
       }
-    });
+    }
+
+    return decWallet;
   } catch (error) {
     console.error(`ERROR: Cannot retreive wallet: ${error.stack}`);
   }
@@ -179,11 +193,11 @@ export const deployUpgradeable = async (
 
 /**
  * Gets the events emited from a contract filtered by name and by event parameters
- * 
+ *
  * @dev indexes must me of the length of the event
  * @dev indexes must be 'null' if not search for this param
  * @dev for event paramater filter to work, SC must define *indexex* in event definition
- * 
+ *
  * @param contractInstance contract that emits the event
  * @param eventName name of the event to search for
  * @param indexes filters by the event parameters

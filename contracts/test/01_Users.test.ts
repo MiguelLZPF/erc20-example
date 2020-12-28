@@ -8,6 +8,7 @@ import {
   deployUpgradeable,
   GAS_OPT,
   getEvents,
+  getWallet,
   provider,
 } from "../scripts/Blockchain";
 import { expect } from "chai";
@@ -21,13 +22,10 @@ import { MyToken } from "../typechain/MyToken";
 import { Users } from "../typechain/Users";
 
 // General Contants
-const WALL_NUMBER = 3;
 const WALL_PASS = "password";
-const WALL_ENTROPY = "EnTrOpY";
 // Specific Constants
 
 // General variables
-let wallets: Wallet[] = [];
 let admin: Wallet;
 let user00: Wallet;
 let user01: Wallet;
@@ -44,59 +42,50 @@ let myToken: MyToken;
 
 describe("Registry", async function () {
   //this.timeout
-
-  before(async () => {
-    const accounts = await ethers.getSigners();
-    /* accounts.forEach(async (signer) => {
-      console.log(await signer.getAddress());
-    }); */
-
-    if (accounts.length < WALL_NUMBER) {
-      console.warn(
-        `Warning: the number of wallet created will be greater than the providers accounts length (${accounts.length}),
-          so the remaining wallets will have a balance of 0 wei`
-      );
-    }
-
-    let wallet: Promise<Wallet | undefined>;
-
-    try {
-      if (!(await fs.exists("./keystore"))) {
-        await fs.mkdir("keystore");
-      }
-      // Asyncronously creates an array of ACC_NUMBER Wallets
-      // Only takes almost the same amount of time to create only one
-      let promWallets: Promise<Wallet | undefined>[] = [];
-      for (let index = 0; index < WALL_NUMBER; index++) {
-        wallet = createWallet(`./keystore/wallet_${index}.json`, WALL_PASS, WALL_ENTROPY);
-        promWallets.push(wallet);
-      }
-      wallets = (await Promise.all(promWallets)) as Wallet[];
-      // If other networks, coment the If structure first time
-      if (hardhatArguments.network == "hardhat") {
-        for (let index = 0; index < WALL_NUMBER; index++) {
-          if (hardhatArguments.network != "hardhat") {
-            await provider.getSigner(index).unlock("");
-          }
-          await accounts[index].sendTransaction({
-            to: wallets[index].address,
-            value: BigNumber.from("0x56BC75E2D63100000"), //100 eth
-          });
-          console.log(`Wallet_${index}:
-          - Address: ${wallets[index].address}
-          - Balance: ${await wallets[index].getBalance()}`);
-        }
-      }
-      // name general accounts
-      admin = wallets[0];
-      user00 = wallets[1];
-      user01 = wallets[2];
-    } catch (error) {
-      console.error(error);
-    }
+const PREV_TEST = "00_deploy";
+  before(`Get data from test ${PREV_TEST}`, async () => {
+    //const accounts = await ethers.getSigners();
+    // Get data from JSON
+    const prevData = JSON.parse(await fs.readFile(`./test/data/${PREV_TEST}.json`));
+    // Get wallets info
+    let wallets: any = Promise.all([
+      getWallet(prevData.wallets.admin, WALL_PASS) as Promise<Wallet>,
+      getWallet(prevData.wallets.user00, WALL_PASS) as Promise<Wallet>,
+      getWallet(prevData.wallets.user01, WALL_PASS) as Promise<Wallet>
+    ]);
+    let contracts: any = Promise.all([
+      ethers.getContractAt("ProxyAdmin", prevData.contracts.proxyAdmin),
+      ethers.getContractAt("ContractRegistry", prevData.contracts.registry),
+      ethers.getContractAt("Users", prevData.contracts.users),
+      ethers.getContractAt("IobManager", prevData.contracts.IobManager),
+      ethers.getContractAt("MyToken", prevData.contracts.myToken)
+    ]);
+    wallets = await wallets;
+    admin = wallets[0].connect(provider);
+    user00 = wallets[1].connect(provider);
+    user01 = wallets[2].connect(provider);
+    contracts = await contracts;
+    proxyAdmin = contracts[0].connect(provider);
+    registry = contracts[1].connect(provider);
+    users = contracts[2].connect(provider);
+    iobManager = contracts[3].connect(provider);
+    myToken = contracts[4].connect(provider);
   });
 
-  step("Should deploy Proxy Admin contract", async () => {
+  step(`Check data from test ${PREV_TEST} is OK`, async () => {
+    expect(admin.address).to.not.be.undefined;
+    expect(user00.address).to.not.be.undefined;
+    expect(user01.address).to.not.be.undefined;
+    expect(proxyAdmin.address).to.not.be.undefined;
+    expect(registry.address).to.not.be.undefined;
+    expect(users.address).to.not.be.undefined;
+    expect(iobManager.address).to.not.be.undefined;
+    expect(myToken.address).to.not.be.undefined;
+
+    console.log(`All data from test ${PREV_TEST} retreived OK`);
+  });
+
+  /* step("Should deploy Proxy Admin contract", async () => {
     console.log("\n ==> Deploying Proxy Admin contract...\n");
 
     proxyAdmin = (await deploy("ProxyAdmin", { signer: admin }))! as ProxyAdmin;
@@ -333,9 +322,9 @@ describe("Registry", async function () {
     expect(tokenRecord.version).to.equal("0x0001");
 
     expect(await myToken.callStatic.owner()).to.equal(admin.address);
-  });
+  }); */
 
-  const TEST_NAME = "00_deploy";
+  const NEXT_TEST = "00_deploy";
   after("Store test information", async () => {
     await fs.writeFile(
       `./test/data/${TEST_NAME}.json`,
