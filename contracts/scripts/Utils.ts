@@ -1,5 +1,8 @@
 import util from "util";
+import CryptoJS from "crypto-js";
+import { keccak256, toUtf8Bytes } from "ethers/lib/utils";
 
+const CRYPTO_KEY = "passworddd";
 /**
  * Converts a decimal version like '01.10' to a bytes2 version like '0x010A'
  * @param decVersion decimal format version
@@ -44,4 +47,25 @@ export const random32Bytes = async () => {
  */
 export const logObject = (object: any) => {
   return util.inspect(object, { showHidden: false, depth: null });
+};
+
+/**
+ * @title Crypto Functions
+ * @dev used for password secure storage and retrieve
+ */
+export const encryptHash = async (value: string): Promise<string> => {
+  const shaValue = CryptoJS.SHA256(value).toString();
+  return CryptoJS.AES.encrypt(shaValue, CRYPTO_KEY).toString();
+};
+export const hash = async (value: string): Promise<string> => {
+  return CryptoJS.SHA256(value).toString();
+};
+export const kHash = async (value: string) => {
+  return keccak256(toUtf8Bytes(value));
+}
+export const encrypt = async (value: string): Promise<string> => {
+  return CryptoJS.AES.encrypt(value, CRYPTO_KEY).toString();
+};
+export const decrypt = async (value: string): Promise<string> => {
+  return CryptoJS.AES.decrypt(value, CRYPTO_KEY).toString(CryptoJS.enc.Utf8);
 };

@@ -24,6 +24,7 @@ import { Users } from "../typechain/Users";
 const WALL_NUMBER = 3;
 const WALL_PASS = "password";
 const WALL_ENTROPY = "EnTrOpY";
+const THIS_TEST = "00_deploy";
 // Specific Constants
 
 // General variables
@@ -36,13 +37,11 @@ let user01: Wallet;
 let proxyAdmin: ProxyAdmin;
 let registry: ContractRegistry;
 let registryAdmin: ContractRegistry;
-let registryU00: ContractRegistry;
-let registryU01: ContractRegistry;
 let users: Users;
 let iobManager: IobManager;
 let myToken: MyToken;
 
-describe("Registry", async function () {
+describe("Deploy of project's contracts", async function () {
   //this.timeout
 
   before(async () => {
@@ -120,8 +119,6 @@ describe("Registry", async function () {
       proxyAdmin.address
     )) as ContractRegistry;
     registryAdmin = registry.connect(admin);
-    registryU00 = registry.connect(user00);
-    registryU01 = registry.connect(user01);
 
     console.log(`Registry successfully deployed:
       - Registry logic address: ${await proxyAdmin.callStatic.getProxyImplementation(
@@ -335,10 +332,9 @@ describe("Registry", async function () {
     expect(await myToken.callStatic.owner()).to.equal(admin.address);
   });
 
-  const TEST_NAME = "00_deploy";
   after("Store test information", async () => {
     await fs.writeFile(
-      `./test/data/${TEST_NAME}.json`,
+      `./test/data/${THIS_TEST}.json`,
       JSON.stringify({
         wallets: {
           admin: admin.address,
@@ -354,6 +350,6 @@ describe("Registry", async function () {
         },
       })
     );
-    console.log(`Test 00 data saved in ./test/data/${TEST_NAME}.json`);
+    console.log(`Test 00 data saved in ./test/data/${THIS_TEST}.json`);
   });
 });

@@ -4,6 +4,7 @@ pragma experimental ABIEncoderV2;
 
 struct User {
   uint256 id;
+  address owner;
   string name;
   string password;
   uint256 dateCreated;
@@ -11,9 +12,13 @@ struct User {
 }
 
 interface IUsers {
-  function newUser(string calldata _name, string calldata _password)
-    external
-    returns (uint256);
+  function initManager(address _iobManager) external;
+
+  function newUser(
+    string calldata _name,
+    string calldata _password,
+    address _owner
+  ) external returns (uint256);
 
   function editUser(
     uint256 _id,
@@ -25,10 +30,9 @@ interface IUsers {
 
   function getUser(uint256 _id) external view returns (User memory);
 
-  function getUsers(uint256[] memory _ids)
-    external
-    view
-    returns (User[] memory);
+  function getUserByOwner(address _owner) external view returns (User memory);
+
+  function getUsers(uint256[] memory _ids) external view returns (User[] memory);
 
   function getAllUsers() external view returns (User[] memory);
 }

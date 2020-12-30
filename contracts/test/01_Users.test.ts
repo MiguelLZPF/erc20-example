@@ -20,10 +20,22 @@ import { ContractRegistry } from "../typechain/ContractRegistry";
 import { IobManager } from "../typechain/IobManager";
 import { MyToken } from "../typechain/MyToken";
 import { Users } from "../typechain/Users";
+import { keccak256, toUtf8Bytes } from "ethers/lib/utils";
+import { encryptHash, hash, kHash } from "../scripts/Utils";
 
-// General Contants
+// General Constants
 const WALL_PASS = "password";
+const PREV_TEST = "00_deploy";
+const THIS_TEST = "01_Users";
 // Specific Constants
+const USER00 = {
+  name: "Username_00",
+  password: "password00",
+};
+const USER01 = {
+  name: "Username_01",
+  password: "password01",
+};
 
 // General variables
 let admin: Wallet;
@@ -33,16 +45,16 @@ let user01: Wallet;
 // -- Contracts
 let proxyAdmin: ProxyAdmin;
 let registry: ContractRegistry;
-let registryAdmin: ContractRegistry;
-let registryU00: ContractRegistry;
-let registryU01: ContractRegistry;
 let users: Users;
 let iobManager: IobManager;
+let iobManagerAdmin: IobManager;
+let iobManagerU00: IobManager;
+let iobManagerU01: IobManager;
 let myToken: MyToken;
 
-describe("Registry", async function () {
+describe("Users contract related test", async function () {
   //this.timeout
-const PREV_TEST = "00_deploy";
+
   before(`Get data from test ${PREV_TEST}`, async () => {
     //const accounts = await ethers.getSigners();
     // Get data from JSON
@@ -51,14 +63,14 @@ const PREV_TEST = "00_deploy";
     let wallets: any = Promise.all([
       getWallet(prevData.wallets.admin, WALL_PASS) as Promise<Wallet>,
       getWallet(prevData.wallets.user00, WALL_PASS) as Promise<Wallet>,
-      getWallet(prevData.wallets.user01, WALL_PASS) as Promise<Wallet>
+      getWallet(prevData.wallets.user01, WALL_PASS) as Promise<Wallet>,
     ]);
     let contracts: any = Promise.all([
       ethers.getContractAt("ProxyAdmin", prevData.contracts.proxyAdmin),
       ethers.getContractAt("ContractRegistry", prevData.contracts.registry),
       ethers.getContractAt("Users", prevData.contracts.users),
-      ethers.getContractAt("IobManager", prevData.contracts.IobManager),
-      ethers.getContractAt("MyToken", prevData.contracts.myToken)
+      ethers.getContractAt("IobManager", prevData.contracts.iobManager),
+      ethers.getContractAt("MyToken", prevData.contracts.myToken),
     ]);
     wallets = await wallets;
     admin = wallets[0].connect(provider);
@@ -69,6 +81,8 @@ const PREV_TEST = "00_deploy";
     registry = contracts[1].connect(provider);
     users = contracts[2].connect(provider);
     iobManager = contracts[3].connect(provider);
+    iobManagerU00 = iobManager.connect(user00);
+    iobManagerU01 = iobManager.connect(user01);
     myToken = contracts[4].connect(provider);
   });
 
@@ -80,11 +94,49 @@ const PREV_TEST = "00_deploy";
     expect(registry.address).to.not.be.undefined;
     expect(users.address).to.not.be.undefined;
     expect(iobManager.address).to.not.be.undefined;
+    expect(iobManagerU00.address).to.not.be.undefined;
+    expect(iobManagerU01.address).to.not.be.undefined;
     expect(myToken.address).to.not.be.undefined;
 
     console.log(`All data from test ${PREV_TEST} retreived OK`);
   });
 
+  step("Should create two new users", async () => {
+    // Hashed encrypted passwords
+    const encPassU00 = encryptHash(USER00.password);
+    const encPassU01 = encryptHash(USER01.password);
+    // calculate hashes to compare later
+    const hashPassU00 = hash(USER00.password);
+    const hashPassU01 = hash(USER01.password);
+    const kHashNameU00 = kHash(USER00.name);
+    const kHashNameU01 = kHash(USER01.name);
+
+    const receiptU00 = (await iobManagerU00.newUser(USER00.name, await encPassU00, GAS_OPT)).wait();
+    const receiptU01 = (await iobManagerU01.newUser(USER01.name, await encPassU01, GAS_OPT)).wait();
+
+    const events = (await getEvents(
+      iobManager,
+      "UserCreated",
+      [null, null, null],
+      false,
+      (await receiptU00).blockNumber,
+      (await receiptU01).blockNumber
+    )) as Event[];
+    expect(receiptU00).not.to.be.undefined;
+    expect(receiptU01).not.to.be.undefined;
+    expect(events).not.to.be.undefined;
+
+    for (let index = 0; index < events.length; index++) {
+      const block = provider.getBlock(events[index].blockHash);
+      const id = parseInt((events[index].args?.id as BigNumber)._hex);
+
+      console.log(`User '${id}' set:
+      - Id: ${id}
+      - Name hash: ${events[index].args?.name.hash}
+      - Password: ${events[index].args?.password}
+      - Created: ${new Date((await block).timestamp * 1000)}`);
+    }
+  });
   /* step("Should deploy Proxy Admin contract", async () => {
     console.log("\n ==> Deploying Proxy Admin contract...\n");
 
@@ -324,10 +376,9 @@ const PREV_TEST = "00_deploy";
     expect(await myToken.callStatic.owner()).to.equal(admin.address);
   }); */
 
-  const NEXT_TEST = "00_deploy";
   after("Store test information", async () => {
     await fs.writeFile(
-      `./test/data/${TEST_NAME}.json`,
+      `./test/data/${THIS_TEST}.json`,
       JSON.stringify({
         wallets: {
           admin: admin.address,
@@ -343,6 +394,6 @@ const PREV_TEST = "00_deploy";
         },
       })
     );
-    console.log(`Test 00 data saved in ./test/data/${TEST_NAME}.json`);
+    console.log(`Test data saved in ./test/data/${THIS_TEST}.json`);
   });
 });

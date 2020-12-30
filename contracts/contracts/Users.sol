@@ -13,12 +13,16 @@ import "./IUsers.sol";
  */
 contract Users is Ownable {
   // PROPERTIES
+  // IobManager's account
+  address iobManager;
   // array for all access
   User[] usersA;
   // maps the id with array's index
   mapping(uint256 => uint256) usersI;
   // sets valid index for array
   mapping(uint256 => bool) usersV;
+  // flag to mark the initialization state of the contract
+  bool internal initComplete;
 
   // FUNCTIONS
   /**
@@ -29,14 +33,20 @@ contract Users is Ownable {
     __Ownable_init();
   }
 
-  function newUser(string memory _name, string memory _password)
-    public
-    userInputReq(_name, _password)
-    returns (uint256)
-  {
+  function initManager(address _iobManager) external onlyOnce {
+    iobManager = _iobManager;
+    initComplete = true;
+  }
+
+  function newUser(
+    string memory _name,
+    string memory _password,
+    address _owner
+  ) public userInputReq(_name, _password) onlyManager returns (uint256) {
     // create new user
     User memory user;
     user.id = usersA.length;
+    user.owner = _owner;
     user.name = _name;
     user.password = _password;
     user.dateCreated = block.timestamp;
@@ -46,6 +56,7 @@ contract Users is Ownable {
     uint256 userId = usersA.length - 1;
     usersI[userId] = userId;
     usersV[userId] = true;
+    ownerToUsers[_owner] = userId;
 
     return userId;
   }
@@ -54,7 +65,7 @@ contract Users is Ownable {
     uint256 _id,
     string memory _newName,
     string memory _newPass
-  ) public userInputReq(_newName, _newPass) {
+  ) public userInputReq(_newName, _newPass) onlyManager {
     require(usersV[_id], "This user does not exist");
 
     User memory user = usersA[usersI[_id]];
@@ -65,8 +76,9 @@ contract Users is Ownable {
     usersA[usersI[_id]] = user;
   }
 
-  function deleteUser(uint256 _id) public {
+  function deleteUser(uint256 _id) public onlyManager {
     require(usersV[_id], "This user does not exist");
+    address owner = usersA[usersI[_id]].owner;
 
     // overwrite last element of the array to this id
     User memory lastUser = usersA[usersA.length - 1];
@@ -77,14 +89,21 @@ contract Users is Ownable {
     usersA.pop();
     usersI[_id] = 0; // irrelevant
     usersV[_id] = false; // important
+    ownerToUsers[owner] = 0;
   }
 
-  function getUser(uint256 _id) public view returns (User memory) {
+  function getUser(uint256 _id) public view onlyManager returns (User memory) {
     require(usersV[_id], "User not stored yet or not found");
     return usersA[usersI[_id]];
   }
 
-  function getUsers(uint256[] memory _ids) public view returns (User[] memory) {
+  function getUserByOwner(address _owner) public view onlyManager returns (User memory) {
+    uint256 id = ownerToUsers[_owner];
+    require(usersV[id], "User not stored yet or not found");
+    return usersA[usersI[id]];
+  }
+
+  function getUsers(uint256[] memory _ids) public view onlyManager returns (User[] memory) {
     User[] memory users = new User[](_ids.length);
     for (uint256 i = 0; i < _ids.length; i++) {
       users[i] = getUser(_ids[i]);
@@ -93,17 +112,22 @@ contract Users is Ownable {
     return users;
   }
 
-  function getAllUsers() public view returns (User[] memory) {
+  function getAllUsers() public view onlyManager returns (User[] memory) {
     return usersA;
   }
 
   // MODIFIERS
+  modifier onlyManager() {
+    require(msg.sender == iobManager, "can only be called from manager");
+    _;
+  }
+  modifier onlyOnce() {
+    require(!initComplete, "Initialization already completed");
+    _;
+  }
   modifier userInputReq(string memory _username, string memory _password) {
     // Username
-    require(
-      bytes(_username).length < 20,
-      "Username length must be less than 20 characters"
-    );
+    require(bytes(_username).length < 20, "Username length must be less than 20 characters");
     // Password
     require(
       bytes(_password).length > 15,
