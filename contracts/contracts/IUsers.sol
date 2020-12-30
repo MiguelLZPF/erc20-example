@@ -3,7 +3,7 @@ pragma solidity >=0.6.0 <0.8.0;
 pragma experimental ABIEncoderV2;
 
 struct User {
-  uint256 id;
+  bytes32 id;
   address owner;
   string name;
   string password;
@@ -18,21 +18,19 @@ interface IUsers {
     string calldata _name,
     string calldata _password,
     address _owner
-  ) external returns (uint256);
+  ) external returns (bytes32);
 
   function editUser(
-    uint256 _id,
+    bytes32 _id,
     string calldata _newName,
     string calldata _newPass
   ) external;
 
-  function deleteUser(uint256 _id) external;
+  function deleteUser(bytes32 _id) external;
 
-  function getUser(uint256 _id) external view returns (User memory);
+  function getUser(bytes32 _id) external view returns (User memory);
 
-  function getUserByOwner(address _owner) external view returns (User memory);
-
-  function getUsers(uint256[] memory _ids) external view returns (User[] memory);
+  function getUsers(bytes32[] memory _ids) external view returns (User[] memory);
 
   function getAllUsers() external view returns (User[] memory);
 }

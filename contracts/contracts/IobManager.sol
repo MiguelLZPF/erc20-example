@@ -14,24 +14,23 @@ import "./IUsers.sol";
 contract IobManager is Ownable {
   // EVENTS
   event UserCreated(
-    uint256 indexed id,
+    bytes32 indexed id,
     string indexed name,
     string password
     // uint256 indexed date // Not needed -- use Block.timestamp
   );
   event UserEdited(
-    uint256 indexed id,
+    bytes32 indexed id,
     string indexed newName,
     string newPassword
   );
-  event UserDeleted(uint256 indexed id);
+  event UserDeleted(bytes32 indexed id);
 
   IUsers users;
   // maps the owner's account with the user's id
-  mapping(address => uint256) internal ownerToUser;
+  mapping(address => bytes32) internal ownerToUser;
 
   // FUNCTIONS
-
   function initialize(address _users) external initializer {
     // initializate the owner as the msg.sender through ownable contract
     __Ownable_init();
@@ -40,34 +39,38 @@ contract IobManager is Ownable {
   }
 
   function newUser(string memory _name, string memory _password) external {
-    uint256 userId = users.newUser(_name, _password, _msgSender());
-
+    address sender = _msgSender();
+    require(ownerToUser[sender] == bytes32(0), "Cannot have more than one user with one account");
+    bytes32 userId = users.newUser(_name, _password, sender);
+    ownerToUser[sender] = userId;
     emit UserCreated(userId, _name, _password);
   }
 
   function editUser(
-    uint256 _id,
+    bytes32 _id,
     string memory _newName,
     string memory _newPass
   ) public {
-    users.editUser(_id, _newName, _newPass, _msgSender());
+    require(ownerToUser[_msgSender()] == _id, "This user is not yours");
+    users.editUser(_id, _newName, _newPass);
     emit UserEdited(_id, _newName, _newPass);
   }
 
-  function deleteUser(uint256 _id) public {
+  function deleteUser(bytes32 _id) public {
+    require(ownerToUser[_msgSender()] == _id, "This user is not yours");
     users.deleteUser(_id);
     emit UserDeleted(_id);
   }
 
-  function getUser(uint256 _id) external view onlyOwner returns (User memory) {
+  function getUser(bytes32 _id) external view onlyOwner returns (User memory) {
     return users.getUser(_id);
   }
 
   function getMyUser() external view returns (User memory) {
-    return users.getUserByOwner(_msgSender());
+    return users.getUser(ownerToUser[_msgSender()]);
   }
   function getUserByOwner(address _owner) external view onlyOwner returns (User memory) {
-    return users.getUserByOwner(_owner);
+    return users.getUser(ownerToUser[_owner]);
   }
 
   function getAllUsers() public view onlyOwner returns (User[] memory) {

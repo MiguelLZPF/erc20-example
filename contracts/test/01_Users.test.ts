@@ -21,7 +21,7 @@ import { IobManager } from "../typechain/IobManager";
 import { MyToken } from "../typechain/MyToken";
 import { Users } from "../typechain/Users";
 import { keccak256, toUtf8Bytes } from "ethers/lib/utils";
-import { encryptHash, hash, kHash } from "../scripts/Utils";
+import { decrypt, encryptHash, hash, kHash } from "../scripts/Utils";
 
 // General Constants
 const WALL_PASS = "password";
@@ -106,10 +106,8 @@ describe("Users contract related test", async function () {
     const encPassU00 = encryptHash(USER00.password);
     const encPassU01 = encryptHash(USER01.password);
     // calculate hashes to compare later
-    const hashPassU00 = hash(USER00.password);
-    const hashPassU01 = hash(USER01.password);
-    const kHashNameU00 = kHash(USER00.name);
-    const kHashNameU01 = kHash(USER01.name);
+    const hashPass = [hash(USER00.password), hash(USER01.password)];
+    const kHashNames = [kHash(USER00.name), kHash(USER01.name)];
 
     const receiptU00 = (await iobManagerU00.newUser(USER00.name, await encPassU00, GAS_OPT)).wait();
     const receiptU01 = (await iobManagerU01.newUser(USER01.name, await encPassU01, GAS_OPT)).wait();
@@ -128,13 +126,15 @@ describe("Users contract related test", async function () {
 
     for (let index = 0; index < events.length; index++) {
       const block = provider.getBlock(events[index].blockHash);
-      const id = parseInt((events[index].args?.id as BigNumber)._hex);
-
-      console.log(`User '${id}' set:
-      - Id: ${id}
+      console.log(`User created:
+      - Id: ${events[index].args?.id}
       - Name hash: ${events[index].args?.name.hash}
       - Password: ${events[index].args?.password}
       - Created: ${new Date((await block).timestamp * 1000)}`);
+
+      expect(events[index].args!.id).not.to.be.undefined;
+      expect(events[index].args!.name.hash).to.equal(await kHashNames[index]);
+      expect(await decrypt(events[index].args!.password)).to.equal(await hashPass[index]);
     }
   });
   /* step("Should deploy Proxy Admin contract", async () => {
