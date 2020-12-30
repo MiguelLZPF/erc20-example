@@ -57,8 +57,10 @@ contract IobManager is Ownable {
   }
 
   function deleteUser(bytes32 _id) public {
-    require(ownerToUser[_msgSender()] == _id, "This user is not yours");
+    address sender = _msgSender();
+    require(ownerToUser[sender] == _id, "This user is not yours");
     users.deleteUser(_id);
+    ownerToUser[sender] = bytes32(0);
     emit UserDeleted(_id);
   }
 

@@ -47,7 +47,6 @@ let proxyAdmin: ProxyAdmin;
 let registry: ContractRegistry;
 let users: Users;
 let iobManager: IobManager;
-let iobManagerAdmin: IobManager;
 let iobManagerU00: IobManager;
 let iobManagerU01: IobManager;
 let myToken: MyToken;
@@ -60,7 +59,9 @@ describe("Users contract and IobManager user related test", async function () {
   before(`Get data from test ${PREV_TEST}`, async () => {
     //const accounts = await ethers.getSigners();
     // Get data from JSON
-    const prevData = JSON.parse(await fs.readFile(`./test/data/${PREV_TEST}.json`));
+    const prevData = JSON.parse(
+      await fs.readFile(`./test/data/${PREV_TEST}.json`)
+    );
     // Get wallets info
     let wallets: any = Promise.all([
       getWallet(prevData.wallets.admin, WALL_PASS) as Promise<Wallet>,
@@ -79,13 +80,13 @@ describe("Users contract and IobManager user related test", async function () {
     user00 = wallets[1].connect(provider);
     user01 = wallets[2].connect(provider);
     contracts = await contracts;
-    proxyAdmin = contracts[0].connect(provider);
-    registry = contracts[1].connect(provider);
-    users = contracts[2].connect(provider);
-    iobManager = contracts[3].connect(provider);
+    proxyAdmin = contracts[0].connect(admin);
+    registry = contracts[1].connect(admin);
+    users = contracts[2].connect(admin);
+    iobManager = contracts[3].connect(admin);
     iobManagerU00 = iobManager.connect(user00);
     iobManagerU01 = iobManager.connect(user01);
-    myToken = contracts[4].connect(provider);
+    myToken = contracts[4].connect(admin);
   });
 
   step(`Check data from test ${PREV_TEST} is OK`, async () => {
@@ -111,8 +112,12 @@ describe("Users contract and IobManager user related test", async function () {
     const hashPass = [hash(USER00.password), hash(USER01.password)];
     const kHashNames = [kHash(USER00.name), kHash(USER01.name)];
 
-    const receiptU00 = (await iobManagerU00.newUser(USER00.name, await encPassU00, GAS_OPT)).wait();
-    const receiptU01 = (await iobManagerU01.newUser(USER01.name, await encPassU01, GAS_OPT)).wait();
+    const receiptU00 = (
+      await iobManagerU00.newUser(USER00.name, await encPassU00, GAS_OPT)
+    ).wait();
+    const receiptU01 = (
+      await iobManagerU01.newUser(USER01.name, await encPassU01, GAS_OPT)
+    ).wait();
 
     const events = (await getEvents(
       iobManager,
@@ -136,7 +141,9 @@ describe("Users contract and IobManager user related test", async function () {
 
       expect(events[index].args!.id).not.to.be.undefined;
       expect(events[index].args!.name.hash).to.equal(await kHashNames[index]);
-      expect(await decrypt(events[index].args!.password)).to.equal(await hashPass[index]);
+      expect(await decrypt(events[index].args!.password)).to.equal(
+        await hashPass[index]
+      );
     }
     // Save account --> ID
     userMap.set(user00.address, events[0].args!.id);
@@ -193,18 +200,18 @@ describe("Users contract and IobManager user related test", async function () {
       - Created: ${new Date((await block).timestamp * 1000)}`);
 
       expect(events[index].args!.id).not.to.be.undefined;
-      expect(events[index].args!.newName.hash).to.equal(await kHashNames[index]);
-      expect(await decrypt(events[index].args!.newPassword)).to.equal(await hashPass[index]);
+      expect(events[index].args!.newName.hash).to.equal(
+        await kHashNames[index]
+      );
+      expect(await decrypt(events[index].args!.newPassword)).to.equal(
+        await hashPass[index]
+      );
     }
   });
 
   step("Should get users and check all", async () => {
-    // Hashed encrypted passwords
-    const encPassU00 = encryptHash(USER00.password);
-    const encPassU01 = encryptHash(USER01.password);
     // calculate hashes to compare later
     const hashPass = [hash(USER00.password), hash(USER01.password)];
-    const kHashNames = [kHash(USER00.name), kHash(USER01.name)];
 
     const answerU00 = await iobManagerU00.callStatic.getMyUser();
     const answerU01 = await iobManagerU01.callStatic.getMyUser();
@@ -218,27 +225,78 @@ describe("Users contract and IobManager user related test", async function () {
     expect(answerU01.name).to.equal(USER01.name);
     expect(await decrypt(answerU00.password)).to.equal(await hashPass[0]);
     expect(await decrypt(answerU01.password)).to.equal(await hashPass[1]);
-    expect(answerU00.dateCreated).to.be.lessThan(answerU00.dateModified);
-    expect(answerU01.dateCreated).to.be.lessThan(answerU01.dateModified);
-    
-    expect(events).not.to.be.undefined;
-
-    for (let index = 0; index < events.length; index++) {
-      const block = provider.getBlock(events[index].blockHash);
-      console.log(`User edited:
-      - Id: ${events[index].args?.id}
-      - Name hash: ${events[index].args?.newName.hash}
-      - Password: ${events[index].args?.newPassword}
-      - Created: ${new Date((await block).timestamp * 1000)}`);
-
-      expect(events[index].args!.id).not.to.be.undefined;
-      expect(events[index].args!.newName.hash).to.equal(await kHashNames[index]);
-      expect(await decrypt(events[index].args!.newPassword)).to.equal(await hashPass[index]);
-    }
+    expect(parseInt(answerU00.dateCreated._hex)).to.be.lessThan(
+      parseInt(answerU00.dateModified._hex)
+    );
+    expect(parseInt(answerU01.dateCreated._hex)).to.be.lessThan(
+      parseInt(answerU01.dateModified._hex)
+    );
   });
-  
+
+  step("Should get all users", async () => {
+    const allUsers = await iobManager.callStatic.getAllUsers();
+
+    expect(allUsers.length).to.equal(2);
+    expect(allUsers[0].id).not.to.be.undefined;
+    expect(allUsers[1].id).not.to.be.undefined;
+  });
+
+  step("Should remove first user", async () => {
+    const user00_id = userMap.get(user00.address);
+    expect(user00_id).not.to.be.undefined;
+    const receipt = (
+      await iobManagerU00.deleteUser(user00_id!, GAS_OPT)
+    ).wait();
+
+    const event = (await getEvents(
+      iobManager,
+      "UserDeleted",
+      [user00_id],
+      true,
+      (await receipt).blockNumber,
+      (await receipt).blockNumber
+    )) as Event;
+    expect(event).not.to.be.undefined;
+    expect(event.args).not.to.be.undefined;
+    expect(event.args!.id).to.equal(user00_id);
+
+    const allUsers = await iobManager.callStatic.getAllUsers();
+    expect(allUsers.length).to.equal(1);
+    expect(allUsers[0].id).to.equal(userMap.get(user01.address));
+    userMap.delete(user00.address);
+    expect(userMap.size).to.equal(1);
+  });
 
   after("Store test information", async () => {
+    // re-create second user
+    // Hashed encrypted passwords
+    const encPassU01 = encryptHash(USER01.password);
+    // calculate hashes to compare later
+    const hashPassU01 = hash(USER01.password);
+    const kHashNameU01 = kHash(USER01.name);
+
+    const receiptU01 = (
+      await iobManagerU01.newUser(USER01.name, await encPassU01, GAS_OPT)
+    ).wait();
+
+    const event = (await getEvents(
+      iobManager,
+      "UserCreated",
+      [null, await kHashNameU01, null],
+      true,
+      (await receiptU01).blockNumber,
+      (await receiptU01).blockNumber
+    )) as Event;
+    expect(receiptU01).not.to.be.undefined;
+    expect(event).not.to.be.undefined;
+    expect(event.args!.id).not.to.be.undefined;
+    expect(event.args!.name.hash).to.equal(await kHashNameU01);
+    expect(await decrypt(event.args!.password)).to.equal(await hashPassU01);
+    // Save account --> ID
+    userMap.set(user01.address, event.args!.id);
+    expect(userMap.get(user01.address)).to.equal(event.args!.id);
+    expect(userMap.size).to.equal(2);
+
     await fs.writeFile(
       `./test/data/${THIS_TEST}.json`,
       JSON.stringify({
