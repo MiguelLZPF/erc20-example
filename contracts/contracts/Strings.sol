@@ -47,14 +47,22 @@ library Strings {
   }
 
   function hash(string memory _string) internal pure returns (bytes32 _hash) {
-    return keccak256(abi.encodePacked((_string)));
+    return keccak256(abi.encodePacked(_string));
   }
 
-  function compareStrings(string memory _a, string memory _b)
+  function equals(string memory _a, string memory _b)
     internal
     pure
     returns (bool _equals)
   {
     return hash(_a) == hash(_b);
+  }
+
+  function equalsB(bytes32 _a, bytes32 _b)
+    internal
+    pure
+    returns (bool _equals)
+  {
+    return keccak256(abi.encodePacked(_a)) == keccak256(abi.encodePacked(_b));
   }
 }

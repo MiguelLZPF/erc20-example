@@ -28,7 +28,7 @@ contract IobManager is Ownable {
 
   IUsers users;
   // maps the owner's account with the user's id
-  mapping(address => bytes32) internal ownerToUser;
+  mapping(address => bytes32) public ownerToUser;
 
   // FUNCTIONS
   function initialize(address _users) external initializer {
@@ -51,7 +51,7 @@ contract IobManager is Ownable {
     string memory _newName,
     string memory _newPass
   ) public {
-    require(ownerToUser[_msgSender()] == _id, "This user is not yours");
+    require(_id == ownerToUser[_msgSender()], "This user is not yours");
     users.editUser(_id, _newName, _newPass);
     emit UserEdited(_id, _newName, _newPass);
   }

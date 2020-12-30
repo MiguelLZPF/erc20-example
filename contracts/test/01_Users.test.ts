@@ -51,8 +51,10 @@ let iobManagerAdmin: IobManager;
 let iobManagerU00: IobManager;
 let iobManagerU01: IobManager;
 let myToken: MyToken;
+// maps account and user ID
+let userMap = new Map<string, string>();
 
-describe("Users contract related test", async function () {
+describe("Users contract and IobManager user related test", async function () {
   //this.timeout
 
   before(`Get data from test ${PREV_TEST}`, async () => {
@@ -136,245 +138,105 @@ describe("Users contract related test", async function () {
       expect(events[index].args!.name.hash).to.equal(await kHashNames[index]);
       expect(await decrypt(events[index].args!.password)).to.equal(await hashPass[index]);
     }
-  });
-  /* step("Should deploy Proxy Admin contract", async () => {
-    console.log("\n ==> Deploying Proxy Admin contract...\n");
+    // Save account --> ID
+    userMap.set(user00.address, events[0].args!.id);
+    userMap.set(user01.address, events[1].args!.id);
 
-    proxyAdmin = (await deploy("ProxyAdmin", { signer: admin }))! as ProxyAdmin;
-
-    console.log(`Proxy Admin successfully deployed:
-      - Proxy Admin address: ${proxyAdmin.address}
-      - Proxy Admin's owner: ${await proxyAdmin.callStatic.owner(GAS_OPT)}\n`);
-
-    expect(await proxyAdmin.owner(GAS_OPT)).to.equal(
-      await admin.getAddress(),
-      `Proxy Admin's owner not equal admin address`
-    );
+    expect(userMap.get(user00.address)).to.equal(events[0].args!.id);
+    expect(userMap.get(user01.address)).to.equal(events[1].args!.id);
+    expect(userMap.size).to.equal(2);
   });
 
-  step("Should deploy Registry contract", async () => {
-    console.log("\n ==> Deploying registry contract...\n");
+  step("Should edit the two users", async () => {
+    // Hashed encrypted passwords
+    const encPassU00 = encryptHash(USER00.password);
+    const encPassU01 = encryptHash(USER01.password);
+    // calculate hashes to compare later
+    const hashPass = [hash(USER00.password), hash(USER01.password)];
+    const kHashNames = [kHash(USER00.name), kHash(USER01.name)];
 
-    registry = (await deployUpgradeable(
-      "ContractRegistry",
-      { signer: admin },
-      proxyAdmin.address
-    )) as ContractRegistry;
-    registryAdmin = registry.connect(admin);
-    registryU00 = registry.connect(user00);
-    registryU01 = registry.connect(user01);
-
-    console.log(`Registry successfully deployed:
-      - Registry logic address: ${await proxyAdmin.callStatic.getProxyImplementation(
-        registry.address,
+    const receiptU00 = (
+      await iobManagerU00.editUser(
+        userMap.get(user00.address)!,
+        USER00.name,
+        await encPassU00,
         GAS_OPT
-      )}
-      - Registry proxy address: ${registry.address}
-      - Registry proxy's admin: ${await proxyAdmin.callStatic.getProxyAdmin(
-        registry.address,
+      )
+    ).wait();
+    const receiptU01 = (
+      await iobManagerU01.editUser(
+        userMap.get(user01.address)!,
+        USER01.name,
+        await encPassU01,
         GAS_OPT
-      )} \n`);
+      )
+    ).wait();
 
-    const initEvent = (await getEvents(
-      registry,
-      "Initialized",
-      [registry.address, admin.address],
-      true
-    )) as Event;
-    //console.log(initEvent.args);
-
-    expect(await registry.owner()).to.equal(
-      admin.address,
-      `Registry's owner not equal admin's address`
-    );
-
-    expect(await proxyAdmin.callStatic.getProxyAdmin(registry.address, GAS_OPT)).to.equal(
-      proxyAdmin.address,
-      `Registry's admin not equal proxy admin's address`
-    );
-
-    expect(initEvent.args?.registry).to.equal(
-      registry.address,
-      `Registry's address not equal event address`
-    );
-
-    expect(initEvent.args?.owner).to.equal(
-      admin.address,
-      `Event's owner not equal admin's address`
-    );
-    expect((await registry.callStatic.getTypeByName("generic")).name).to.equal(
-      "generic",
-      "Generic type not setted in initializer"
-    );
-  });
-
-  step("Should set contract types", async () => {
-    console.log("\n ==> Setting contract Types and Versions...\n");
-
-    const receipts = await setTypes(registry, ["iob-manager", "iob-token", "iob-users"]);
-
-    const newTypeEvents = (await getEvents(
-      registry,
-      "NewType",
+    const events = (await getEvents(
+      iobManager,
+      "UserEdited",
       [null, null, null],
       false,
-      receipts[0].blockNumber,
-      receipts[0].blockNumber
+      (await receiptU00).blockNumber,
+      (await receiptU01).blockNumber
     )) as Event[];
+    expect(receiptU00).not.to.be.undefined;
+    expect(receiptU01).not.to.be.undefined;
+    expect(events).not.to.be.undefined;
 
-    newTypeEvents.forEach((event) => {
-      console.log(`Type '${event.args?.name}' set: 
-      - Id: ${event.args?.id}
-      - Name: ${event.args?.name}
-      - Version: ${event.args?.version}`);
-    });
+    for (let index = 0; index < events.length; index++) {
+      const block = provider.getBlock(events[index].blockHash);
+      console.log(`User edited:
+      - Id: ${events[index].args?.id}
+      - Name hash: ${events[index].args?.newName.hash}
+      - Password: ${events[index].args?.newPassword}
+      - Created: ${new Date((await block).timestamp * 1000)}`);
 
-    console.log(await registry.getTypes(GAS_OPT));
+      expect(events[index].args!.id).not.to.be.undefined;
+      expect(events[index].args!.newName.hash).to.equal(await kHashNames[index]);
+      expect(await decrypt(events[index].args!.newPassword)).to.equal(await hashPass[index]);
+    }
   });
 
-  step("Should deploy Users contract", async () => {
-    console.log("\n ==> Deploying Users contract...\n");
+  step("Should get users and check all", async () => {
+    // Hashed encrypted passwords
+    const encPassU00 = encryptHash(USER00.password);
+    const encPassU01 = encryptHash(USER01.password);
+    // calculate hashes to compare later
+    const hashPass = [hash(USER00.password), hash(USER01.password)];
+    const kHashNames = [kHash(USER00.name), kHash(USER01.name)];
 
-    users = (await deployWithRegistry(
-      registry,
-      "Users",
-      { signer: admin },
-      "iob-users",
-      true
-    )) as Users;
-    expect(users).not.to.be.undefined;
+    const answerU00 = await iobManagerU00.callStatic.getMyUser();
+    const answerU01 = await iobManagerU01.callStatic.getMyUser();
 
-    const deployEvent = (await getEvents(
-      registry,
-      "Deployed",
-      [null, null, admin.address, null, null],
-      true,
-      await provider.getBlockNumber(),
-      await provider.getBlockNumber()
-    )) as Event;
-    expect(deployEvent).not.to.be.undefined;
-    console.log(`Users contract deployed event: 
-      - Proxy: ${deployEvent.args?.proxy}
-      - Logic: ${deployEvent.args?.logic}
-      - Owner: ${deployEvent.args?.owner}\n`);
-    expect(deployEvent.args?.owner).to.equal(admin.address);
-    expect(deployEvent.args?.proxy).not.to.equal(
-      deployEvent.args?.logic,
-      "Proxy's address cannot be the same as logic's address"
-    );
+    expect(answerU00).not.to.be.undefined;
+    expect(answerU01).not.to.be.undefined;
+    expect(answerU00.id).not.to.equal(answerU01.id);
+    expect(answerU00.owner).to.equal(user00.address);
+    expect(answerU01.owner).to.equal(user01.address);
+    expect(answerU00.name).to.equal(USER00.name);
+    expect(answerU01.name).to.equal(USER01.name);
+    expect(await decrypt(answerU00.password)).to.equal(await hashPass[0]);
+    expect(await decrypt(answerU01.password)).to.equal(await hashPass[1]);
+    expect(answerU00.dateCreated).to.be.lessThan(answerU00.dateModified);
+    expect(answerU01.dateCreated).to.be.lessThan(answerU01.dateModified);
+    
+    expect(events).not.to.be.undefined;
 
-    const usersRecord = await registryAdmin.callStatic.getRecord(users.address, GAS_OPT);
-    expect(usersRecord).not.to.be.undefined;
-    console.log(`Users contract Record:
-        - Proxy: ${usersRecord.proxy}
-        - Logic: ${usersRecord.logic}
-        - Owner: ${usersRecord.owner}
-        - Type: ${usersRecord.type_}
-        - Version: ${usersRecord.version}
-        - Date Created: ${new Date(parseInt(usersRecord.dateCreated._hex) * 1000)}
-        - Date Updated: ${new Date(parseInt(usersRecord.dateUpdated._hex) * 1000)}`);
-    expect(usersRecord.proxy).not.to.equal(usersRecord.logic);
-    expect(usersRecord.owner).to.equal(admin.address);
-    expect(usersRecord.type_).to.equal("iob-users");
-    expect(usersRecord.version).to.equal("0x0001");
+    for (let index = 0; index < events.length; index++) {
+      const block = provider.getBlock(events[index].blockHash);
+      console.log(`User edited:
+      - Id: ${events[index].args?.id}
+      - Name hash: ${events[index].args?.newName.hash}
+      - Password: ${events[index].args?.newPassword}
+      - Created: ${new Date((await block).timestamp * 1000)}`);
 
-    expect(await users.callStatic.owner()).to.equal(admin.address);
+      expect(events[index].args!.id).not.to.be.undefined;
+      expect(events[index].args!.newName.hash).to.equal(await kHashNames[index]);
+      expect(await decrypt(events[index].args!.newPassword)).to.equal(await hashPass[index]);
+    }
   });
-
-  step("Should deploy Manager contract", async () => {
-    console.log("\n ==> Deploying Manager contract...\n");
-
-    iobManager = (await deployWithRegistry(
-      registry,
-      "IobManager",
-      { signer: admin },
-      "iob-manager",
-      true,
-      [users.address]
-    )) as IobManager;
-    expect(iobManager).not.to.be.undefined;
-
-    const deployEvent = (await getEvents(
-      registry,
-      "Deployed",
-      [null, null, admin.address, null, null],
-      true,
-      await provider.getBlockNumber(),
-      await provider.getBlockNumber()
-    )) as Event;
-    expect(deployEvent).not.to.be.undefined;
-    console.log(`IobManager contract deployed event: 
-      - Proxy: ${deployEvent.args?.proxy}
-      - Logic: ${deployEvent.args?.logic}
-      - Owner: ${deployEvent.args?.owner}\n`);
-    expect(deployEvent.args?.owner).to.equal(admin.address);
-    expect(deployEvent.args?.proxy).not.to.equal(
-      deployEvent.args?.logic,
-      "Proxy's address cannot be the same as logic's address"
-    );
-
-    const managerRecord = await registryAdmin.callStatic.getRecord(iobManager.address, GAS_OPT);
-    expect(managerRecord).not.to.be.undefined;
-    console.log(`IobManager contract Record:
-        - Proxy: ${managerRecord.proxy}
-        - Logic: ${managerRecord.logic}
-        - Owner: ${managerRecord.owner}
-        - Type: ${managerRecord.type_}
-        - Version: ${managerRecord.version}
-        - Date Created: ${new Date(parseInt(managerRecord.dateCreated._hex) * 1000)}
-        - Date Updated: ${new Date(parseInt(managerRecord.dateUpdated._hex) * 1000)}`);
-    expect(managerRecord.proxy).not.to.equal(managerRecord.logic);
-    expect(managerRecord.owner).to.equal(admin.address);
-    expect(managerRecord.type_).to.equal("iob-manager");
-    expect(managerRecord.version).to.equal("0x0001");
-
-    expect(await iobManager.callStatic.owner()).to.equal(admin.address);
-  });
-
-  step("Should deploy Token contract", async () => {
-    console.log("\n ==> Deploying Token contract...\n");
-
-    myToken = (await deployWithRegistry(registry, "MyToken", { signer: admin }, "iob-token", true, [
-      iobManager.address,
-    ])) as MyToken;
-    expect(myToken).not.to.be.undefined;
-
-    const deployEvent = (await getEvents(
-      registry,
-      "Deployed",
-      [null, null, admin.address, null, null],
-      true,
-      await provider.getBlockNumber(),
-      await provider.getBlockNumber()
-    )) as Event;
-    expect(deployEvent).not.to.be.undefined;
-    console.log(`IobManager contract deployed event: 
-      - Proxy: ${deployEvent.args?.proxy}
-      - Logic: ${deployEvent.args?.logic}
-      - Owner: ${deployEvent.args?.owner}\n`);
-    expect(deployEvent.args?.owner).to.equal(admin.address);
-    expect(deployEvent.args?.proxy).not.to.equal(
-      deployEvent.args?.logic,
-      "Proxy's address cannot be the same as logic's address"
-    );
-
-    const tokenRecord = await registryAdmin.callStatic.getRecord(myToken.address, GAS_OPT);
-    expect(tokenRecord).not.to.be.undefined;
-    console.log(`IobManager contract Record:
-        - Proxy: ${tokenRecord.proxy}
-        - Logic: ${tokenRecord.logic}
-        - Owner: ${tokenRecord.owner}
-        - Type: ${tokenRecord.type_}
-        - Version: ${tokenRecord.version}
-        - Date Created: ${new Date(parseInt(tokenRecord.dateCreated._hex) * 1000)}
-        - Date Updated: ${new Date(parseInt(tokenRecord.dateUpdated._hex) * 1000)}`);
-    expect(tokenRecord.proxy).not.to.equal(tokenRecord.logic);
-    expect(tokenRecord.owner).to.equal(admin.address);
-    expect(tokenRecord.type_).to.equal("iob-token");
-    expect(tokenRecord.version).to.equal("0x0001");
-
-    expect(await myToken.callStatic.owner()).to.equal(admin.address);
-  }); */
+  
 
   after("Store test information", async () => {
     await fs.writeFile(
