@@ -1,6 +1,7 @@
 import util from "util";
 import CryptoJS from "crypto-js";
 import { keccak256, toUtf8Bytes } from "ethers/lib/utils";
+import { BigNumber, FixedNumber } from "ethers";
 
 const CRYPTO_KEY = "passworddd";
 /**
@@ -48,6 +49,13 @@ export const random32Bytes = async () => {
 export const logObject = (object: any) => {
   return util.inspect(object, { showHidden: false, depth: null });
 };
+
+export const toBigNum = async (amount: number) => {
+  // lost decimals
+  //return BigNumber.from(amount).mul(BigNumber.from(10).pow(DECIMALS));
+  return BigNumber.from(FixedNumber.fromString(amount.toString()));
+};
+
 
 /**
  * @title Crypto Functions

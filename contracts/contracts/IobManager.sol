@@ -116,12 +116,6 @@ contract IobManager is Ownable {
     emit Transfer(spender.id, recipient.id, _amount);
   }
 
-  function approve(uint256 _amount) public {
-    // from: msg.sender to: Manager amount: _amount
-    myToken.approve(address(this), _amount);
-    emit Approval(ownerToUser[_msgSender()], _amount);
-  }
-
   // MODIFIERS
   modifier onlyOnce() {
     require(!initComplete, "Initialization already completed");
