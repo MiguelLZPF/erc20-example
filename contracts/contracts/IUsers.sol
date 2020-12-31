@@ -12,7 +12,7 @@ struct User {
 }
 
 interface IUsers {
-  function initManager(address _iobManager) external;
+  function initManager() external;
 
   function newUser(
     string calldata _name,

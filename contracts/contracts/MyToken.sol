@@ -5,6 +5,7 @@ import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import {
   OwnableUpgradeable as Ownable
 } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "./IobManager.sol";
 
 /**
  * ERC20 Compliant token
@@ -12,8 +13,6 @@ import {
 contract MyToken is ERC20Upgradeable, Ownable {
   event TokenInitialized(address indexed tokenAddr, address indexed byAccount);
 
-  // 6 for good performance.// Not used in new version of OpenZeppelin: = 18; fixed
-  //uint8 constant TOKEN_DECIMALS = 6;
   uint256 constant TOKEN_INIT_AMOUNT = 10000000000000;
   string constant TOKEN_NAME = "My Token";
   string constant TOKEN_SYMBOL = "iob";
@@ -25,7 +24,10 @@ contract MyToken is ERC20Upgradeable, Ownable {
     __ERC20_init(TOKEN_NAME, TOKEN_SYMBOL);
     //uint256 totalSupply = _amount.mul(10**uint256(_decimals));
     uint256 totalSupply = TOKEN_INIT_AMOUNT * (10**uint256(18));
+    // transfer all tokens to the rich one account
     _mint(_richOne, totalSupply);
+    // Initialize the IobManager with the Token address
+    IobManager(_richOne).initToken();
     emit Transfer(address(0), _msgSender(), totalSupply);
     emit TokenInitialized(address(this), _msgSender());
   }

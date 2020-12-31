@@ -34,8 +34,8 @@ contract Users is Ownable {
     __Ownable_init();
   }
 
-  function initManager(address _iobManager) external onlyOnce {
-    iobManager = _iobManager;
+  function initManager() external onlyOnce {
+    iobManager = _msgSender();
     initComplete = true;
   }
 

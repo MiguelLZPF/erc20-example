@@ -1,11 +1,8 @@
-import { BigNumber, Wallet, Event } from "ethers";
-import { ethers, hardhatArguments } from "hardhat";
+import { Wallet, Event } from "ethers";
+import { ethers } from "hardhat";
 
 import * as fs from "async-file";
 import {
-  createWallet,
-  deploy,
-  deployUpgradeable,
   GAS_OPT,
   getEvents,
   getWallet,
@@ -13,14 +10,12 @@ import {
 } from "../scripts/Blockchain";
 import { expect } from "chai";
 import { step } from "mocha-steps";
-import { deployWithRegistry, setTypes } from "../scripts/Registry";
 
 import { ProxyAdmin } from "../typechain/ProxyAdmin";
 import { ContractRegistry } from "../typechain/ContractRegistry";
 import { IobManager } from "../typechain/IobManager";
 import { MyToken } from "../typechain/MyToken";
 import { Users } from "../typechain/Users";
-import { keccak256, toUtf8Bytes } from "ethers/lib/utils";
 import { decrypt, encryptHash, hash, kHash } from "../scripts/Utils";
 
 // General Constants
@@ -248,6 +243,8 @@ describe("Users contract and IobManager user related test", async function () {
       await iobManagerU00.deleteUser(user00_id!, GAS_OPT)
     ).wait();
 
+    //expect(parseInt(await iobManager.ownerToUser(user00.address))).to.equal(0);
+
     const event = (await getEvents(
       iobManager,
       "UserDeleted",
@@ -270,31 +267,31 @@ describe("Users contract and IobManager user related test", async function () {
   after("Store test information", async () => {
     // re-create second user
     // Hashed encrypted passwords
-    const encPassU01 = encryptHash(USER01.password);
+    const encPassU00 = encryptHash(USER00.password);
     // calculate hashes to compare later
-    const hashPassU01 = hash(USER01.password);
-    const kHashNameU01 = kHash(USER01.name);
+    const hashPassU00 = hash(USER00.password);
+    const kHashNameU00 = kHash(USER00.name);
 
-    const receiptU01 = (
-      await iobManagerU01.newUser(USER01.name, await encPassU01, GAS_OPT)
+    const receiptU00 = (
+      await iobManagerU00.newUser(USER00.name, await encPassU00, GAS_OPT)
     ).wait();
 
     const event = (await getEvents(
       iobManager,
       "UserCreated",
-      [null, await kHashNameU01, null],
+      [null, null, null],
       true,
-      (await receiptU01).blockNumber,
-      (await receiptU01).blockNumber
+      (await receiptU00).blockNumber,
+      (await receiptU00).blockNumber
     )) as Event;
-    expect(receiptU01).not.to.be.undefined;
-    expect(event).not.to.be.undefined;
+    expect(receiptU00).not.to.be.undefined;
+    expect(event.args).not.to.be.undefined;
     expect(event.args!.id).not.to.be.undefined;
-    expect(event.args!.name.hash).to.equal(await kHashNameU01);
-    expect(await decrypt(event.args!.password)).to.equal(await hashPassU01);
+    expect(event.args!.name.hash).to.equal(await kHashNameU00);
+    expect(await decrypt(event.args!.password)).to.equal(await hashPassU00);
     // Save account --> ID
-    userMap.set(user01.address, event.args!.id);
-    expect(userMap.get(user01.address)).to.equal(event.args!.id);
+    userMap.set(user00.address, event.args!.id);
+    expect(userMap.get(user00.address)).to.equal(event.args!.id);
     expect(userMap.size).to.equal(2);
 
     await fs.writeFile(
