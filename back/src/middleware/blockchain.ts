@@ -6,20 +6,26 @@ import {
   Contract,
   FixedNumber,
   providers,
+  Signer,
+  Wallet,
+  Event,
 } from "ethers";
-import Web3 from "web3";
 import { Constants, Variables } from "./../utils/config";
 import Admin, { IAdmin } from "../models/Admin";
-import * as PaapToken from "./../contracts/artifacts/PaapToken.json";
-import * as PAAP from "./../contracts/artifacts/PAAP.json";
-import * as User from "./../contracts/artifacts/User.json";
-import * as Loan from "./../contracts/artifacts/Loan.json";
+import { ProxyAdmin } from "../typechain/ProxyAdmin";
+import { ContractRegistry } from "../typechain/ContractRegistry";
+import { IobManager } from "../typechain/IobManager";
+import { MyToken } from "../typechain/MyToken";
+import { Users } from "../typechain/Users";
+import * as AProxyAdmin from "./../artifacts/@openzeppelin/contracts/proxy/ProxyAdmin.sol/ProxyAdmin.json";
+import * as ATUP from "./../artifacts/@openzeppelin/contracts/proxy/TransparentUpgradeableProxy.sol/TransparentUpgradeableProxy.json";
+import * as AContractRegistry from "./../artifacts/contracts/ContractRegistry.sol/ContractRegistry.json";
+import * as AIobManager from "./../artifacts/contracts/IobManager.sol/IobManager.json";
 import { FunctionFragment, hexlify, isAddress } from "ethers/lib/utils";
 import { logger, logStart, logClose, logObject } from "./logger";
 import ExtUser, { IExtUser } from "../models/ExtUser";
-import { decrypt } from "./auth";
+import * as fs from "async-file";
 
-let web3: any;
 export let provider: providers.WebSocketProvider | providers.JsonRpcProvider;
 
 export type TransactionReceipt = providers.TransactionReceipt;
@@ -34,10 +40,13 @@ export const DECIMALS = 18;
 // address 0x00000... (bytes20) to compare
 export const ZERO_ADDRESS = hexlify({ length: 20 });
 const MAX_GAS_LIMIT = BigNumber.from("0x23c3ffff"); //("0x23C34600"); // 600000000
-const GAS_OPTS = { gasPrice: "0x00", gasLimit: "0x23c3ffff" };
+const GAS_OPT = { gasPrice: "0x00", gasLimit: "0x23c3ffff" };
 
-export let tokenInstance: Contract | undefined;
-export let paapInstance: Contract | undefined;
+export let proxyAdmin: ProxyAdmin | undefined;
+export let contractRegistry: ContractRegistry | undefined;
+export let iobManager: IobManager | undefined;
+export let myToken: MyToken | undefined;
+export let users: Users | undefined;
 
 const configProviders = async () => {
   const logInfo = logStart("blockchain.ts", "configProviders", "trace");
@@ -84,52 +93,35 @@ const configProviders = async () => {
     const uri = `${protocol}://${ip}:${port}/${route}`;
     const options = Constants.WEB3_PROTOCOL == "RPC" ? web3Opt_rpc : web3Opt_ws;
     // Connect Provider with given params
-    await connectProviders(protocol, uri, options);
-    if (!web3 || !provider) {
-      throw new Error(` ${logInfo.instance} Providers not connected`);
+    await connectProviders(protocol, uri);
+    if (!provider) {
+      throw new Error(` ${logInfo.instance} Provider not connected`);
     }
     // Show warning if not Alastria
     if (ip != "34.249.142.75") {
-      logger.warn(
-        ` ${logInfo.instance} Not using ALASTRIA T network. Using '${ip}' network`
-      );
+      logger.warn(` ${logInfo.instance} Not using ALASTRIA T network. Using '${ip}' network`);
     } else {
-      logger.info(
-        ` ${logInfo.instance} Using ALASTRIA T Network :-) (Be patient...)`
-      );
+      logger.info(` ${logInfo.instance} Using ALASTRIA T Network :-) (Be patient...)`);
     }
-    web3.currentProvider.on("reconnect", async () => {
-      // Conect Provider with given params
-      connectProviders(protocol, uri, options);
-      logger.warn(`RECONNECTING PROVIDERS...`);
-    });
     provider.on("reconnect", async () => {
       // Conect Provider with given params
-      connectProviders(protocol, uri, options);
+      connectProviders(protocol, uri);
       logger.warn(`RECONNECTING PROVIDERS...`);
     });
   } catch (e) {
-    logger.error(` ${logInfo.instance} Configuring Providers. ${e.stack}`);
+    logger.error(` ${logInfo.instance} Configuring Provider. ${e.stack}`);
   } finally {
     logClose(logInfo);
   }
 };
 
-const connectProviders = async (
-  protocol: string,
-  uri: string,
-  options: any
-) => {
+const connectProviders = async (protocol: string, uri: string) => {
   const logInfo = logStart("blockchain.ts", "connectProviders", "trace");
   try {
     if (protocol == "http") {
-      //// WEB3 JS PROVIDER
-      web3 = new Web3(new Web3.providers.HttpProvider(uri, options));
       //// ETHERS JS PROVIDER
       provider = new ethers.providers.JsonRpcProvider(uri);
     } else {
-      //// WEB3 JS PROVIDER
-      web3 = new Web3(new Web3.providers.WebsocketProvider(uri, options));
       //// ETHERS JS PROVIDER
       provider = new ethers.providers.WebSocketProvider(uri);
     }
@@ -146,15 +138,8 @@ const showProviders = async () => {
   let tokenFound = false;
   let paapFound = false;
   try {
-    if (
-      isAddress(Variables.TOKEN_ADDRESS) &&
-      isAddress(Variables.PAAP_ADDRESS)
-    ) {
-      const token = new Contract(
-        Variables.TOKEN_ADDRESS,
-        PaapToken.abi,
-        provider
-      );
+    if (isAddress(Variables.TOKEN_ADDRESS) && isAddress(Variables.PAAP_ADDRESS)) {
+      const token = new Contract(Variables.TOKEN_ADDRESS, PaapToken.abi, provider);
       const paap = new Contract(Variables.PAAP_ADDRESS, PAAP.abi, provider);
       if (token && token.address == Variables.TOKEN_ADDRESS) {
         tokenFound = true;
@@ -168,569 +153,301 @@ const showProviders = async () => {
   }
 
   logger.info(` ${logInfo.instance} Providers connected:
-          Web3: ${logObject(web3.currentProvider.url)}
           Ethers: ${logObject(provider.connection.url)}
           
-          Current Token: ${
-            Variables.TOKEN_ADDRESS
-          } (Deployed in Network: ${tokenFound})
-          Current Paap: ${
-            Variables.PAAP_ADDRESS
-          } (Deployed in Network: ${paapFound}) \n`);
+          Current Token: ${Variables.TOKEN_ADDRESS} (Deployed in Network: ${tokenFound})
+          Current Paap: ${Variables.PAAP_ADDRESS} (Deployed in Network: ${paapFound}) \n`);
   //logger.debug(` Delegate accounts: [${await provider.listAccounts()}]`)
-  logger.debug(
-    ` ${logInfo.instance} Delegate accounts: [${await getDelegateAddrs(10)}]`
-  );
+  logger.debug(` ${logInfo.instance} Delegate accounts: [${await getDelegateAddrs(10)}]`);
   logClose(logInfo);
 };
 
-// =================== WEB 3 only ===========================
-
-/**
- * @title New Account
- * @dev   function that creates a new account locked with password
- * @param password the password that locks the account
- * @return the address of the new account
- */
-export const newAccount = async (password: string) => {
-  const logInfo = logStart("blockchain.ts", "newAccount", "trace");
+const initContracts = async () => {
+  const logInfo = logStart("blockchain.ts", "initContracts", "info");
   try {
-    logger.debug(` ${logInfo.instance} creating new delegate account...`);
-    return await web3.eth.personal.newAccount(password);
+    const admin = (await retrieveWallet(Constants.ADMIN_PATH, Constants.ADMIN_PASSWORD))!;
+    if (
+      Variables.PROXY_ADMIN &&
+      Variables.CONTRACT_REGISTRY &&
+      Variables.IOB_MANAGER &&
+      Variables.MY_TOKEN &&
+      Variables.USERS
+    ) {
+      proxyAdmin = new Contract(Variables.PROXY_ADMIN, AProxyAdmin.abi, admin) as ProxyAdmin;
+    } else {
+      await deployContracts(admin);
+    }
   } catch (error) {
-    console.error(`Error creating new account. ${error}
-      ${error.stack}`);
+    logger.error(` ${logInfo.instance} Initializing Contracts. ${error.stack}`);
+  } finally {
+    logClose(logInfo);
   }
-  logClose(logInfo);
 };
 
-/**
- * @title Lock Account
- * @dev   function that locks an account
- * @param accountAddress the account's address to lock
- * @return the address of the new account
- */
-/* export const lockAccount = async (accountAddress: string): Promise<boolean> => {
+const deployContracts = async (admin?: Wallet) => {
+  const logInfo = logStart("blockchain.ts", "deployContracts", "info");
   try {
-    return await web3.eth.personal.lockAccount(accountAddress);
+    admin = admin ? admin : (await retrieveWallet(Constants.ADMIN_PATH, Constants.ADMIN_PASSWORD))!;
+
+    // Proxy Admin
+    logger.info(` ${logInfo.instance} Deploying Proxy Admin contract...`);
+
+    proxyAdmin = (await deploy(AProxyAdmin, admin)) as ProxyAdmin;
+
+    logger.info(`Proxy Admin successfully deployed:
+      - Proxy Admin address: ${proxyAdmin.address}
+      - Proxy Admin's owner: ${await proxyAdmin.callStatic.owner(GAS_OPT)}\n`);
+
+    // Registry
+    logger.info(` ${logInfo.instance} Deploying registry contract...`);
+
+    contractRegistry = (await deployUpgradeable(
+      AContractRegistry,
+      admin,
+      proxyAdmin
+    )) as ContractRegistry;
+
+    logger.info(`Registry successfully deployed:
+      - Registry logic address: ${await proxyAdmin.callStatic.getProxyImplementation(
+        contractRegistry.address,
+        GAS_OPT
+      )}
+      - Registry proxy address: ${contractRegistry.address}
+      - Registry proxy's admin: ${await proxyAdmin.callStatic.getProxyAdmin(
+        contractRegistry.address,
+        GAS_OPT
+      )} \n`);
+
+    const initEvent = (await getEvents(
+      contractRegistry,
+      "Initialized",
+      [contractRegistry.address, admin.address],
+      true
+    )) as Event;
+
+    if (!initEvent || !initEvent.args) {
+      throw new Error(`Initialize event not retreived`);
+    }
+    if (!initEvent.args.registry || !isAddress(initEvent.args.registry)) {
+      throw new Error(`Initialize event's registry address not valid`);
+    }
+    if (!initEvent.args.owner || !isAddress(initEvent.args.owner || initEvent.args.owner != admin.address)) {
+      throw new Error(`Registry owner should be admin`);
+    }
+
+    ////////////////////////////////////////////////////////////////////// SET CONTRACT Types
+
   } catch (error) {
-    console.error(`Error locking account ${accountAddress}`);
-    console.error(error);
-    return false;
+    logger.error(` ${logInfo.instance} Deploying Contracts. ${error.stack}`);
+  } finally {
+    logClose(logInfo);
   }
-} */
+};
+
+// // ================ WALLETS and ACCOUNTS ===================
+
 /**
- * @title Unlock Account
- * @dev   function that unlocks a new account with password
- * @param accountAddress address of the account to unlock
- * @param password the password that unlocks the account
- * @param unlockTime seconds to unlock the acoount
- * @return boolean: true = unlocked
+ *  Async funtion that creates a new wallet and stores it encripted in the path specified.
+ *
+ * @dev If alrready created, it decrypts and returns it.
+ *
+ * @param path to store the new generated wallet
+ * @param password used to encript and decript the wallet
+ * @param entropy used to add random to the private key
+ *
+ * @return wallet the instance of the Wallet created, unencrypted and ready to use
  */
-/* export const unlockAccount = async (
-  accountAddress: string,
+export const createWallet = async (
+  path: string,
   password: string,
-  unlockTime?: number
-): Promise<boolean> => {
-
+  entropy?: string
+): Promise<Wallet | undefined> => {
+  let wallet: Wallet | undefined;
   try {
-    if (unlockTime != undefined) {
-      return await web3.eth.personal.unlockAccount(
-        accountAddress,
-        password,
-        unlockTime
-      );
-    } else {
-      return await web3.eth.personal.unlockAccount(
-        accountAddress,
-        password,
-      );
-    }
-  } catch (error) {
-    console.error(`Error unlocking account ${accountAddress}`);
-    console.error(error);
-    return false;
-  }
-} */
-// ===========================================================
-
-// =================== ETHERS only ===========================
-
-// // ================ ACCOUNTS ===================
-
-const getDelegateAddrs = async (
-  quantity?: number,
-  start?: number,
-  end?: number
-) => {
-  const allAcc = await provider.listAccounts();
-  if (start && end) {
-    return allAcc.slice(start, end);
-  } else if (quantity && start) {
-    return allAcc.slice(start, start + quantity);
-  } else if (quantity) {
-    return allAcc.slice(allAcc.length - quantity);
-  }
-  return allAcc.slice;
-};
-
-/**
- * @title is Delegate Account ?
- * @dev   checks if an account's address is delegate or not
- * @param account address of the account to check
- * @returns true if given account is in the providers account list
- */
-export const isDelegateAcc = async (account: string) => {
-  const logInfo = logStart("blockchain.ts", "isDelegateAccount", "trace");
-  try {
-    const accounts = await provider.listAccounts();
-    if (accounts.includes(account)) {
-      logger.trace(` ${logInfo.instance} account '${account}' is delegate`);
-      return true;
-    } else {
-      logger.trace(` ${logInfo.instance} account '${account}' is not delegate`);
-      return false;
-    }
-  } catch (error) {
-    logger.error(` ${logInfo.instance} ERROR: ${error.trace}`);
-    return false;
-  } finally {
-    logClose(logInfo);
-  }
-};
-
-/**
- * @title Unlock Account
- * @dev   function that unlocks a delegated account with password
- * @param account address of the account to unlock
- * @param password the password that unlocks the account
- * @return boolean: true = unlocked
- */
-export const unlockAccount = async (
-  account: string,
-  password?: Promise<string> | string
-) => {
-  const logInfo = logStart("blockchain.ts", "unlockAccount", "trace");
-  try {
-    // async check if delegate account
-    const isDelegate = isDelegateAcc(account);
-    // if no password given
-    if (!password) {
-      let userDBnoNull: IExtUser | IAdmin | null;
-      const userDB = ExtUser.findOne({ account: account });
-      const adminDB = Admin.findOne({ account: account });
-
-      userDBnoNull = (await userDB) ? await userDB : await adminDB;
-      if (!userDBnoNull || !userDBnoNull.account) {
-        throw new Error(`cannot find account in DB`);
+    // if not exists, create save in wallets and keystores (encypted)
+    if (!(await fs.exists(path))) {
+      console.log(`${path} does not exists, creating new one`);
+      if (entropy) {
+        wallet = Wallet.createRandom(entropy);
+      } else {
+        wallet = Wallet.createRandom();
       }
-      password = decrypt(userDBnoNull.accPass!);
-    }
-    if (await isDelegate) {
-      logger.debug(` ${logInfo.instance} unlocking account '${account}...'`);
-      return {
-        unlocked: await provider.getSigner(account).unlock(await password),
-        delegated: true,
-      } as IUnlockRes;
+      wallet = wallet.connect(provider);
+      const encWallet = wallet.encrypt(password);
+      fs.writeFile(path, await encWallet);
     } else {
-      logger.warn(
-        ` ${logInfo.instance} account '${account}' is external, cannot unlock`
-      );
-      return {
-        unlocked: false,
-        delegated: false,
-      } as IUnlockRes;
+      // if exists, read, decrypt and return
+      const encWallet = JSON.parse(await fs.readFile(path));
+      wallet = await Wallet.fromEncryptedJson(JSON.stringify(encWallet), password);
+      wallet = wallet.connect(provider);
     }
   } catch (error) {
-    logger.error(
-      ` ${logInfo.instance} Error unlocking account ${account}. ${error.stack}`
-    );
-    return {
-      unlocked: false,
-      delegated: undefined,
-    } as IUnlockRes;
-  } finally {
-    logClose(logInfo);
+    console.error(`ERROR: Cannot create or retreive wallet: ${error.stack}`);
+  }
+  return wallet;
+};
+
+/**
+ *  Async funtion that decrypts a wallet.
+ *
+ * @param path where the wallet should be stored
+ * @param password used to encript and decript the wallet
+ *
+ * @return wallet the instance of the Wallet created, unencrypted and ready to use
+ */
+export const retrieveWallet = async (
+  path: string,
+  password: string
+): Promise<Wallet | undefined> => {
+  let wallet: Wallet | undefined;
+  try {
+    const encWallet = JSON.parse(await fs.readFile(path));
+    wallet = await Wallet.fromEncryptedJson(JSON.stringify(encWallet), password);
+    wallet = wallet.connect(provider);
+  } catch (error) {
+    console.error(`ERROR: Cannot retreive wallet: ${error.stack}`);
+  }
+  return wallet;
+};
+
+/**
+ * Gets the Wallets (without decryp them) as an array of strings from json
+ * @param path the path where wallets are stored. Defaults to "keystore"
+ */
+export const getWallets = async (path?: string) => {
+  try {
+    path = path ? path : "./keystore";
+    let readWallets: Promise<string>[] = [];
+    let encWallets: any[] = [];
+
+    const fileWallets = await fs.readdir(path);
+    for (let index = 0; index < fileWallets.length; index++) {
+      readWallets.push(fs.readFile(`${path}/${fileWallets[index]}`));
+    }
+
+    (await Promise.all(readWallets)).forEach((wallet) => {
+      encWallets.push(JSON.parse(wallet));
+    });
+
+    return encWallets;
+  } catch (error) {
+    console.error(`ERROR: Cannot retreive wallets: ${error.stack}`);
+  }
+};
+
+/**
+ * Gets the wallet from a Signer address and decrypts it
+ * @param from Signer that should have a wallet with is address
+ * @param password to decript the JSON encrypted wallet
+ */
+export const getWallet = async (address: string, password: string) => {
+  try {
+    const encWallets = (await getWallets())!;
+    if (!encWallets || !encWallets[0] || !encWallets[0].address) {
+      throw new Error("No wallets found");
+    }
+
+    let decWallet: Wallet | undefined;
+    for (let index = 0; index < encWallets.length; index++) {
+      if (
+        (encWallets[index].address as string).toLowerCase() ==
+        address.slice(2, address.length).toLowerCase()
+      ) {
+        decWallet = Wallet.fromEncryptedJsonSync(JSON.stringify(encWallets[index]), password);
+      }
+    }
+
+    return decWallet;
+  } catch (error) {
+    console.error(`ERROR: Cannot retreive wallet: ${error.stack}`);
   }
 };
 
 // // ================ CONTRACTS ===================
 
 /**
- * @title Deploy Contract
- * @dev   deploy an smart contract to the blockchain directly if delegate account, else creates the deploy unsigned TX
- * @param contractABI ABI JSON interface from the contract to deploy
- * @param contractByteCode The byte code of the contract
- * @param from the account address from which the contract will be deployed
- * @param methodParams (optional) list of params to send to the contract's contructor()
- * @param gasPrice (optional) The gas price in wei to use for transactions
- * @param gasLimit (optional) The maximum gas provided for a transaction
- * @returns the Contract instance of the deployed Contract or the unsigned TX
+ * Deploys a contract
+ * @param artifact contract's artifact in JSON format
+ * @param from signer from which to deploy the contract
+ * @param deployParams parameters for the contract's constructor
+ * @return contract deployed
  */
-const deployContract = async (
-  contractABI: any,
-  contractByteCode: string,
-  from: string,
-  methodParams?: any[]
-) => {
-  const logInfo = logStart("blockchain.ts", "deployContract", "trace");
+export const deploy = async (
+  artifact: any,
+  from: Signer,
+  deployParams?: unknown[]
+): Promise<Contract | undefined> => {
   try {
-    methodParams ? methodParams : (methodParams = []);
-    //if (await isDelegateAcc(from)) {
-    const delegateSigner = provider.getSigner(from);
-    const factory = new ContractFactory(
-      contractABI,
-      contractByteCode,
-      delegateSigner
+    deployParams = deployParams ? deployParams : [];
+
+    console.log(
+      `deploying '${
+        artifact.contractName
+      }(${deployParams})' from '${await from.getAddress()}' account`
     );
-    logger.debug(`Deploying contact from '${from}'...`);
-    // Deploy smart contract and wait until deployed
-    return await (await factory.deploy(...methodParams, GAS_OPTS)).deployed();
+    // Deploy contractnpx
+    const contractFactory = new ContractFactory(artifact.abi, artifact.bytecode, from);
+
+    const contractInterface = await contractFactory.deploy(...deployParams, GAS_OPT);
+    return await contractInterface.deployed();
   } catch (error) {
-    logger.error(`Error deploying Smart Contract. ${error.stack}`);
-  } finally {
-    logClose(logInfo);
+    console.error(`ERROR: Cannot deploy Contract. ${error.stack}`);
   }
 };
 
-export const deployTokenContract = async (from: string) => {
-  // save token instance
-  const saveTokenInst = async () => {
-    await new Promise((resolve) => setTimeout(resolve, 10000));
-    await getTokenInstance();
-  };
-  saveTokenInst();
-  return deployContract(PaapToken.abi, PaapToken.bytecode, from);
-};
-
-export const deployPAAPContract = async (from: string) => {
+/**
+ * Deploys an upgradeable contract using ProxyAdmin and TransparentUpgradeableProxy from OpenZeppelin
+ *
+ * @dev If proxyAdmin not passed as argument, it will be deployeda new one
+ *
+ * @param artifact contract's artifact in JSON format
+ * @param from signer from which to deploy the contract
+ * @param proxyAdmin (optional) address of a Proxy Admin contract
+ * @param initParams (optional) parameters for the initialize function (contructor)
+ * @return the deployed upgradeable contract and proxy admin contract if deployed here
+ */
+export const deployUpgradeable = async (
+  artifact: any,
+  from: Signer,
+  proxyAdmin?: ProxyAdmin,
+  initParams?: unknown[]
+): Promise<Contract | Contract[] | undefined> => {
   try {
-    return deployContract(PAAP.abi, PAAP.bytecode, from);
-  } catch (error) {
-    logger.error(error.trace);
-  } finally {
-    savePaapInst();
-  }
-};
+    // if not init params, set to empty array
+    initParams = initParams ? initParams : [];
+    let proxyAdminC: Promise<Contract>;
+    // contract factories
+    const proxyAdminFact = new ContractFactory(AProxyAdmin.abi, AProxyAdmin.bytecode, from);
+    const logicFact = new ContractFactory(artifact.abi, artifact.bytecode, from);
+    const tupFact = new ContractFactory(ATUP.abi, ATUP.bytecode, from);
+    // ~ Deploy (async)
+    // -- deploy logic contract
+    const logic = logicFact.deploy();
+    const initData = logicFact.interface.encodeFunctionData("initialize", [...initParams]);
+    // -- deploy a new proxyAdmin?
+    if (!proxyAdmin) {
+      proxyAdmin = (await deploy(AProxyAdmin, from)) as ProxyAdmin;
+    }
+    // -- deploy Transparent Upgradeable Proxy
+    const tup = await (
+      await tupFact.deploy(
+        (await (await logic).deployed()).address,
+        proxyAdmin.address,
+        initData,
+        GAS_OPT
+      )
+    ).deployed();
 
-const savePaapInst = async () => {
-  await new Promise((resolve) => setTimeout(resolve, 10000));
-  await getPaapInstance();
-};
+    const contract = new Contract(tup.address, artifact.abi, from);
 
-export const deployUserContract = async (from: string) => {
-  return deployContract(User.abi, User.bytecode, from);
-};
-
-export const deployLoanContract = async (from: string) => {
-  return deployContract(Loan.abi, Loan.bytecode, from);
-};
-
-/**
- * @title Get Token Instance
- * @description Method that returns the instance from the blockchain
- */
-export const getTokenInstance = async () => {
-  tokenInstance = tokenInstance
-    ? tokenInstance
-    : new Contract(Variables.TOKEN_ADDRESS, PaapToken.abi, provider);
-  return tokenInstance;
-};
-
-/**
- * @title Get PAAP Instance
- * @description Method that returns the instance from the blockchain
- */
-export const getPaapInstance = async () => {
-  paapInstance = paapInstance
-    ? paapInstance
-    : new Contract(Variables.PAAP_ADDRESS, PAAP.abi, provider);
-  return paapInstance;
-};
-
-/**
- * @title Get User Instance
- * @description Method that returns the instance from the blockchain
- * @param userAddr {string} User SC's address
- */
-export const getUserInstance = async (userAddr: string) => {
-  return new Contract(userAddr, User.abi, provider);
-};
-
-/**
- * @title Get Loan Instance
- * @description Method that returns the instance from the blockchain
- * @param loanAddr {string} Loan SC's address
- */
-export const getLoanInstance = async (loanAddr: string) => {
-  return new Contract(loanAddr, Loan.abi, provider);
-};
-
-// Force Calls to SC (to get return from a non view function)
-export const callStatic = async (
-  contractInstance: Contract,
-  contractMethod: string,
-  from?: string,
-  ...methodParams: any[]
-) => {
-  const logInfo = logStart("blockchain.ts", "callStatic", "trace");
-  try {
-    if (from) {
-      const signer = provider.getSigner(from);
-      contractInstance = contractInstance.connect(signer);
-      logger.debug(
-        ` ${
-          logInfo.instance
-        } Static Call to blockchanin: from ${await contractInstance.signer.getAddress()} to ${contractMethod}(${methodParams})`
-      );
+    // returns the new deployed upgradeable contract and proxyAdmin if deployed here
+    if (proxyAdmin) {
+      return contract;
     } else {
-      contractInstance = contractInstance.connect(provider);
-      logger.debug(
-        ` ${logInfo.instance} Static Call to blockchanin: from Net Provider to ${contractMethod}(${methodParams})`
-      );
-    }
-    return await contractInstance.callStatic[contractMethod](...methodParams);
-  } catch (error) {
-    logger.error(
-      ` ${logInfo.instance} Error static calling Contract(${contractInstance.address}). ${error}`
-    );
-  } finally {
-    logClose(logInfo);
-  }
-};
-/**
- * @title Send Method
- * This function sends the transaction that trigers a contract's method
- * it does not matter if it is delegate or external account
- * @param contractInstance the contract instance to call the method
- * @param contractMethod method of the contract to be transact
- * @param from the account address from which the transaction will be made
- * @param methodParams parameters to send to contract method
- * @param gasPrice (optional) The gas price in wei to use for transactions
- * @param gasLimit (optional) The maximum gas provided for a transaction
- * @return the receipt result of sending the transaction if from is delegated
- * @return the unsigned transaction if from is external
- */
-export const sendMethod = async (
-  contractInstance: Contract,
-  contractMethod: string,
-  from: string,
-  methodParams?: any[],
-  nonce?: number | Promise<number>,
-  gasLimit?: string | number,
-  gasPrice?: string | number
-) => {
-  const logInfo = logStart("blockchain.ts", "sendMethod", "trace");
-  try {
-    methodParams ? methodParams : (methodParams = []);
-
-    const delegateSigner = provider.getSigner(from);
-    if (!delegateSigner || !ethers.utils.isAddress(delegateSigner._address)) {
-      throw new Error("Cannot get the delegate signer");
-    }
-    contractInstance = contractInstance.connect(delegateSigner);
-    logger.debug(
-      ` ${
-        logInfo.instance
-      } Making delegate send ${await contractInstance.signer.getAddress()} --> ${contractMethod}(${methodParams}) `
-    );
-    const respTx: TransactionResponse = await contractInstance.functions[
-      contractMethod
-    ](...methodParams, GAS_OPTS);
-    return await respTx.wait();
-  } catch (error) {
-    console.error(
-      `Error calling Contract(${contractInstance.address}). ${error.stack}`
-    );
-  } finally {
-    logClose(logInfo);
-  }
-};
-
-export const sendMethodTx = async (
-  contractInstance: Contract,
-  contractMethod: string,
-  from: string,
-  methodParams?: any[],
-  nonce?: number | Promise<number>,
-  gasLimit?: string | number,
-  gasPrice?: string | number
-) => {
-  const logInfo = logStart("blockchain.ts", "sendMethod", "trace");
-  try {
-    methodParams ? methodParams : (methodParams = []);
-    nonce = nonce ? nonce : provider.getTransactionCount(from);
-    let unsignedTx: UnsignedTransaction = await contractInstance.populateTransaction[
-      contractMethod
-    ](...methodParams);
-    // complete unsigned Tx info
-    unsignedTx.gasLimit = gasLimit
-      ? BigNumber.from(+gasLimit)
-      : BigNumber.from(MAX_GAS_LIMIT);
-    unsignedTx.gasPrice = gasPrice
-      ? BigNumber.from(+gasPrice)
-      : BigNumber.from("0");
-    unsignedTx.nonce = await nonce;
-    logger.debug(
-      ` ${logInfo.instance} return unsigned send Tx ${from} --> ${contractMethod}(${methodParams})`
-    );
-    return unsignedTx;
-  } catch (error) {
-    console.error(
-      `Error calling Contract(${contractInstance.address}). ${error.stack}`
-    );
-  } finally {
-    logClose(logInfo);
-  }
-};
-
-/**
- * @title Universal Method Call
- * This function can be called to use any type of contract method whether
- * is a constant one or not
- * @param contractInstance the contract instance to call the method
- * @param contractMethod method of the contract to be transact
- * @param from the account address from which the transaction will be made
- * @param methodParams parameters to send to contract method
- * @param gasPrice (optional) The gas price in wei to use for transactions
- * @param gasLimit (optional) The maximum gas provided for a transaction
- * @param value (optional) the value transferred for the transaction in wei
- * @return the receipt result of sending the transaction if send
- * @return the method transaction object if call
- */
-// DEPRECATED
-const universalMethodCall = async (
-  contractInstance: Contract,
-  contractMethod: string,
-  from?: string,
-  methodParams?: any[],
-  nonceOffset?: number,
-  gasLimit?: string | number,
-  gasPrice?: string | number
-) => {
-  const logInfo = await logStart(
-    "blockchain.ts",
-    "universalMethodCall",
-    "trace"
-  );
-  try {
-    nonceOffset ? nonceOffset : (nonceOffset = 0);
-    methodParams ? methodParams : (methodParams = []);
-    if (from && (await isDelegateAcc(from))) {
-      // Is a delegate call or send
-      // Check all functions to check if call or send
-      let isCall,
-        found = false;
-      const fragments = contractInstance.interface.fragments;
-      for (let i = 0; i < fragments.length; i++) {
-        if (
-          fragments[i].type == "function" &&
-          fragments[i].name == contractMethod
-        ) {
-          isCall = FunctionFragment.from(fragments[i]).constant;
-          found = true;
-          break;
-        }
-      }
-      if (!found) {
-        logger.debug();
-        throw new Error(`Cannot find method ${contractMethod} in interface`);
-      }
-
-      if (isCall) {
-        // if is call, make a direct call with from if defined
-        return await callStatic(
-          contractInstance,
-          contractMethod,
-          from,
-          methodParams
-        );
-      } else {
-        const delegateSigner = provider.getSigner(from);
-        if (
-          !delegateSigner ||
-          !ethers.utils.isAddress(delegateSigner._address)
-        ) {
-          throw new Error("Cannot get the delegate signer");
-        }
-        contractInstance = contractInstance.connect(delegateSigner);
-        logger.debug(
-          ` ${
-            logInfo.instance
-          } Making delegate send ${await contractInstance.signer.getAddress()} --> ${contractMethod}(${methodParams}) `
-        );
-        let unsignedTx: UnsignedTransaction = await contractInstance.populateTransaction[
-          contractMethod
-        ](...methodParams);
-
-        // complete unsigned Tx info
-        unsignedTx.gasLimit = gasLimit
-          ? BigNumber.from(+gasLimit)
-          : BigNumber.from(MAX_GAS_LIMIT);
-        unsignedTx.gasPrice = gasPrice
-          ? BigNumber.from(+gasPrice)
-          : BigNumber.from("0");
-        unsignedTx.nonce =
-          (await delegateSigner.getTransactionCount()) + nonceOffset;
-
-        return await delegateSigner.sendTransaction(unsignedTx);
-      }
-    } else {
-      // Is a external wallet call
-      // Check all functions to check if call or send
-      let isCall,
-        found = false;
-      const fragments = contractInstance.interface.fragments;
-      for (let i = 0; i < fragments.length; i++) {
-        if (
-          fragments[i].type == "function" &&
-          fragments[i].name == contractMethod
-        ) {
-          isCall = FunctionFragment.from(fragments[i]).constant;
-          found = true;
-          break;
-        }
-      }
-      if (!found) {
-        throw new Error(`Cannot find method ${contractMethod} in interface`);
-      }
-
-      if (isCall) {
-        // if is call, make a direct call with from if defined
-        return await callStatic(
-          contractInstance,
-          contractMethod,
-          from,
-          methodParams
-        );
-      } else {
-        // Is an external Send transaction which has to be signed
-        let unsignedTx: UnsignedTransaction = await contractInstance.populateTransaction[
-          contractMethod
-        ](...methodParams);
-
-        // complete unsigned Tx info
-        unsignedTx.gasLimit = gasLimit
-          ? BigNumber.from(+gasLimit)
-          : BigNumber.from(MAX_GAS_LIMIT);
-        unsignedTx.gasPrice = gasPrice
-          ? BigNumber.from(+gasPrice)
-          : BigNumber.from("0");
-        unsignedTx.nonce = from
-          ? (await provider.getTransactionCount(from)) + nonceOffset
-          : undefined;
-        logger.debug(
-          ` ${logInfo.instance} return unsigned send Tx ${from} --> ${contractMethod}(${methodParams})`
-        );
-        return unsignedTx;
-      }
+      return [await (await proxyAdminC!).deployed(), contract];
     }
   } catch (error) {
-    console.error(
-      `Error calling Contract(${contractInstance.address}). ${error.stack}`
-    );
-  } finally {
-    logClose(logInfo);
+    console.error(`ERROR: Cannot deploying upgradeable contract. ${error.stack}`);
   }
 };
 
@@ -744,29 +461,39 @@ export const sendTx = async (sTx: string) => {
 
 // ================ EVENTS ===================
 
-export const checkEventInBlock = async (
+/**
+ * Gets the events emited from a contract filtered by name and by event parameters
+ *
+ * @dev indexes must me of the length of the event
+ * @dev indexes must be 'null' if not search for this param
+ * @dev for event paramater filter to work, SC must define *indexex* in event definition
+ *
+ * @param contractInstance contract that emits the event
+ * @param eventName name of the event to search for
+ * @param indexes filters by the event parameters
+ * @param onlyFirst whether or not to get only fist event
+ * @param fromBlock block to start to search from
+ * @param toBlock block to stop to search to
+ * @return event or events found
+ */
+export const getEvents = async (
   contractInstance: Contract,
   eventName: string,
-  eventFilters: any[],
-  startBlock?: number | string,
-  endBlock?: number | string
-) => {
+  indexes: any[],
+  onlyFirst?: boolean,
+  fromBlock?: number | string,
+  toBlock?: number | string
+): Promise<Event | Event[] | undefined> => {
   try {
-    const filter = contractInstance.filters[eventName](...eventFilters);
-    const event = await contractInstance.queryFilter(
-      filter,
-      startBlock,
-      endBlock
-    );
-    if (event[0].event == eventName) {
-      return true;
+    const filter = contractInstance.filters[eventName](...indexes);
+    const events = await contractInstance.queryFilter(filter, fromBlock, toBlock);
+    if (onlyFirst && events.length == 1) {
+      return events[0];
     } else {
-      return false;
+      return events;
     }
   } catch (error) {
-    logger.error(
-      `ERROR: Checking Event in Blocks from "${startBlock}" to "${endBlock}". ${error.stack}`
-    );
+    console.error(`ERROR: Cannot get any event. ${(error.stack, error.code)}`);
   }
 };
 
@@ -781,21 +508,16 @@ export const toBigNum = async (amount: number) => {
   //return BigNumber.from(amount).mul(BigNumber.from(10).pow(DECIMALS));
   return BigNumber.from(FixedNumber.fromString(amount.toString()));
 };
+
 export const toNumber = async (amounts: BigNumber | BigNumber[]) => {
   try {
     // Check if array or not
     if (!(amounts instanceof Array)) {
-      return FixedNumber.fromValue(amounts, DECIMALS)
-        .round(6)
-        .toUnsafeFloat();
+      return FixedNumber.fromValue(amounts, DECIMALS).round(6).toUnsafeFloat();
     } else {
       const result: number[] = [];
       amounts.forEach((amount) => {
-        result.push(
-          FixedNumber.fromValue(amount, DECIMALS)
-            .round(6)
-            .toUnsafeFloat()
-        );
+        result.push(FixedNumber.fromValue(amount, DECIMALS).round(6).toUnsafeFloat());
       });
       return result;
     }
@@ -804,54 +526,7 @@ export const toNumber = async (amounts: BigNumber | BigNumber[]) => {
   }
 };
 
-/**
- * @title From Seconds To Date
- * @description converts into Date object any date in seconds or milliseconds. It is
- *              compatible with values or strings of values.
- * @param dates dates in seconds or millisecond, could be in number or BigNumber format
- * @param milliseconds sets the dates as seconds or milliseconds
- */
-/* export const toDate = async (
-  dates: number | number[] | BigNumber | BigNumber[],
-  milliseconds?: boolean
-) => {
-  try {
-    // default is true
-    milliseconds == undefined ? (milliseconds = true) : (milliseconds = false);
-    if (dates instanceof Array) {
-      // date: number[] | BigNumber[]
-      let result: Date[] = [];
-      if (typeof dates[0] == "number") {
-        // date: number[]
-        dates = dates as number[];
-      } else {
-        // date: BigNumber[]
-        dates = dates as BigNumber[];
-        dates = (await toNumber(dates)) as number[];
-      }
-      dates.forEach(async(date)=>{
-        result.push(milliseconds ? new Date(date) : new Date(date * 1000));
-      })
-      return result;
-    } else {
-      // date: number | bigNumber
-      if (typeof dates == "number") {
-        // date: number
-        return milliseconds ? new Date(dates) : new Date(dates * 1000);
-      } else {
-        // date: BigNumber
-        dates = parseInt(dates._hex);
-        return milliseconds ? new Date(dates) : new Date(dates * 1000);
-      }
-      
-    }
-  } catch (error) {
-    logger.error(`ERROR: ${error}`);
-  }
-}; */
-export const toDate = async (
-  dates: number | number[] | BigNumber | BigNumber[]
-) => {
+export const toDate = async (dates: number | number[] | BigNumber | BigNumber[]) => {
   try {
     if (dates instanceof Array) {
       // date: number[] | BigNumber[]
@@ -885,15 +560,17 @@ export const toDate = async (
   }
 };
 
-export const tokensBalanceOf = async (account: string) => {
-  return await toNumber(
-    await callStatic(
-      await getTokenInstance(),
-      "balanceOf",
-      (await Admin.findOne({ username: Constants.DEFAULT_ADMIN }))!.account,
-      account
-    )
-  );
+/**
+ * Generates a random 32 bytes string array
+ * @return random 32 bytes string array
+ */
+export const random32Bytes = async () => {
+  let bytes: string = "0x";
+  for (let i = 0; i < 64; i++) {
+    const randInt = Math.floor(Math.random() * (15 - 0 + 1) + 0);
+    bytes = `${bytes}${randInt.toString(16)}`;
+  }
+  return bytes;
 };
 
 // Init Providers

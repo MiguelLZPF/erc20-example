@@ -2,14 +2,10 @@ import { Mongoose } from "mongoose";
 import { Constants } from "../utils/config";
 import { logStart, logger, logClose } from "./logger";
 
-// import { MongoClient, Db } from "mongodb";
-// const util = require('util');
-// const {MongoClient, Db} = require('mongodb');
-//import * as mongoose from "mongoose";
 const mongoose = require('mongoose');
 const options = {
-  user: "izertis",
-  pass: "Izertis_1234",
+  user: "iob",
+  pass: "iob",
   useNewUrlParser: true,
   retryWrites: true,
   w: "majority",
@@ -49,27 +45,3 @@ export const mongoConnect = async(): Promise<Mongoose> => {
   logClose(logInfo);
   return mongo;
 }
-
-/* // Ping database to check for common exception errors.
-pool.getConnection((err: { code: string; }, connection: { release: () => void; }) => {
-  if (err) {
-    if (err.code === 'PROTOCOL_CONNECTION_LOST') {
-      console.error('Database connection was closed.');
-    }
-    if (err.code === 'ER_CON_COUNT_ERROR') {
-      console.error('Database has too many connections.');
-    }
-    if (err.code === 'ECONNREFUSED') {
-      console.error('Database connection was refused.');
-    }
-  };
-
-  if (connection) connection.release();
-
-  return;
-});
-
-// Promisify for Node.js async/await.
-pool.query = util.promisify(pool.query);
-
-module.exports = pool; */

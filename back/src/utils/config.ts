@@ -11,6 +11,8 @@ interface Constants {
   // Sensitive Constants should not be on env
   JWT_SECRET: string;
   CRYPTO_KEY: string;
+  ADMIN_PATH: string;
+  ADMIN_PASSWORD: string;
   DEFAULT_ADMIN: string;
   WEB3_PROTOCOL: Web3Protocol;
   WEB3_IP: string;
@@ -41,14 +43,16 @@ switch (process.env.NODE_ENV) {
 dotenv.config({ path: path });
 
 export const Constants: Constants = {
-  APP_NAME: process.env.APP_NAME ? process.env.APP_NAME : "PAAP",
-  ROOT: process.env.ROOT ? process.env.ROOT : "/paap",
+  APP_NAME: process.env.APP_NAME ? process.env.APP_NAME : "IoBTest",
+  ROOT: process.env.ROOT ? process.env.ROOT : "/iobtest",
   LOG_LEVEL: process.env.LOG_LEVEL ? process.env.LOG_LEVEL as LogLevel : "info",
   PORT: process.env.PORT ? process.env.PORT : 3000,
-  MONGO_URI: process.env.MONGO_URI ? process.env.MONGO_URI : "mongodb://127.0.0.1:27017/paap",
+  MONGO_URI: process.env.MONGO_URI ? process.env.MONGO_URI : "mongodb://127.0.0.1:27017/iobtest",
   // Sensitive Constants should not be on env
   JWT_SECRET: "secret",
   CRYPTO_KEY: "password",
+  ADMIN_PATH: "./keystore/admin.json",
+  ADMIN_PASSWORD: "password",
   DEFAULT_ADMIN: "Izertis",
   WEB3_PROTOCOL: process.env.WEB3_PROTOCOL ? process.env.WEB3_PROTOCOL as Web3Protocol : "RPC",
   WEB3_IP: process.env.WEB3_IP ? process.env.WEB3_IP : "127.0.0.1",
@@ -61,6 +65,9 @@ export const Constants: Constants = {
   ALASTRIA_URI_WS: process.env.ALASTRIA_URI_WS ? process.env.ALASTRIA_URI_WS : "ws://34.249.142.75:8546"
 };
 export let Variables = {
-  TOKEN_ADDRESS: process.env.TOKEN_ADDRESS ? process.env.TOKEN_ADDRESS : "",
-  PAAP_ADDRESS: process.env.PAAP_ADDRESS ? process.env.PAAP_ADDRESS : "",
+  PROXY_ADMIN: process.env.PROXY_ADMIN ? process.env.PROXY_ADMIN : undefined,
+  CONTRACT_REGISTRY: process.env.CONTRACT_REGISTRY ? process.env.CONTRACT_REGISTRY : undefined,
+  IOB_MANAGER: process.env.IOB_MANAGER ? process.env.IOB_MANAGER: undefined,
+  MY_TOKEN: process.env.MY_TOKEN ? process.env.MY_TOKEN: undefined,
+  USERS: process.env.USERS ? process.env.USERS: undefined
 };
