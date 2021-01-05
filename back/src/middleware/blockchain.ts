@@ -40,7 +40,7 @@ export const DECIMALS = 18;
 // address 0x00000... (bytes20) to compare
 export const ZERO_ADDRESS = hexlify({ length: 20 });
 const MAX_GAS_LIMIT = BigNumber.from("0x23c3ffff"); //("0x23C34600"); // 600000000
-const GAS_OPT = { gasPrice: "0x00", gasLimit: "0x23c3ffff" };
+export const GAS_OPT = { gasPrice: "0x00", gasLimit: "0x23c3ffff" };
 
 export let proxyAdmin: ProxyAdmin | undefined;
 export let contractRegistry: ContractRegistry | undefined;
@@ -231,12 +231,15 @@ const deployContracts = async (admin?: Wallet) => {
     if (!initEvent.args.registry || !isAddress(initEvent.args.registry)) {
       throw new Error(`Initialize event's registry address not valid`);
     }
-    if (!initEvent.args.owner || !isAddress(initEvent.args.owner || initEvent.args.owner != admin.address)) {
+    if (
+      !initEvent.args.owner ||
+      !isAddress(initEvent.args.owner || initEvent.args.owner != admin.address)
+    ) {
       throw new Error(`Registry owner should be admin`);
     }
 
     ////////////////////////////////////////////////////////////////////// SET CONTRACT Types
-
+    
   } catch (error) {
     logger.error(` ${logInfo.instance} Deploying Contracts. ${error.stack}`);
   } finally {
@@ -571,6 +574,31 @@ export const random32Bytes = async () => {
     bytes = `${bytes}${randInt.toString(16)}`;
   }
   return bytes;
+};
+
+/**
+ * Converts a decimal version like '01.10' to a bytes2 version like '0x010A'
+ * @param decVersion decimal format version
+ * @return hexadecimal bytes2 forma version
+ */
+export const toHexVersion = async (decVersion: string) => {
+  try {
+    let hexVersion = "0x";
+    const splitVersion = decVersion.split(".");
+    if (splitVersion.length != 2) {
+      throw new Error("Not valid version. 'XX.XX' only format accepted.");
+    }
+    splitVersion.forEach(async (byte) => {
+      if (byte.length == 1) {
+        hexVersion = `${hexVersion}0${parseInt(byte).toString(16)}`;
+      } else {
+        hexVersion = `${hexVersion}${parseInt(byte).toString(16)}`;
+      }
+    });
+    return hexVersion;
+  } catch (error) {
+    console.error(`ERROR: Cannot convert to hexadecimal version. ${(error.stack, error.code)}`);
+  }
 };
 
 // Init Providers
