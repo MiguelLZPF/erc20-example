@@ -21,10 +21,13 @@ import * as AProxyAdmin from "./../artifacts/@openzeppelin/contracts/proxy/Proxy
 import * as ATUP from "./../artifacts/@openzeppelin/contracts/proxy/TransparentUpgradeableProxy.sol/TransparentUpgradeableProxy.json";
 import * as AContractRegistry from "./../artifacts/contracts/ContractRegistry.sol/ContractRegistry.json";
 import * as AIobManager from "./../artifacts/contracts/IobManager.sol/IobManager.json";
+import * as AUsers from "./../artifacts/contracts/IUsers.sol/IUsers.json";
+import * as AMyToken from "./../artifacts/contracts/MyToken.sol/MyToken.json";
 import { FunctionFragment, hexlify, isAddress } from "ethers/lib/utils";
 import { logger, logStart, logClose, logObject } from "./logger";
 import ExtUser, { IExtUser } from "../models/ExtUser";
 import * as fs from "async-file";
+import { deployWithRegistry, setTypes } from "./registry";
 
 export let provider: providers.WebSocketProvider | providers.JsonRpcProvider;
 
@@ -166,6 +169,7 @@ const initContracts = async () => {
   const logInfo = logStart("blockchain.ts", "initContracts", "info");
   try {
     const admin = (await retrieveWallet(Constants.ADMIN_PATH, Constants.ADMIN_PASSWORD))!;
+    let deployedNstored = false;
     if (
       Variables.PROXY_ADMIN &&
       Variables.CONTRACT_REGISTRY &&
@@ -173,9 +177,22 @@ const initContracts = async () => {
       Variables.MY_TOKEN &&
       Variables.USERS
     ) {
-      proxyAdmin = new Contract(Variables.PROXY_ADMIN, AProxyAdmin.abi, admin) as ProxyAdmin;
+      proxyAdmin = new Contract(Variables.PROXY_ADMIN, AProxyAdmin.abi, provider) as ProxyAdmin;
+      contractRegistry = new Contract(
+        Variables.CONTRACT_REGISTRY,
+        AContractRegistry.abi,
+        provider
+      ) as ContractRegistry;
+      iobManager = new Contract(Variables.IOB_MANAGER, AIobManager.abi, provider) as IobManager;
+      myToken = new Contract(Variables.MY_TOKEN, AMyToken.abi, provider) as MyToken;
+      users = new Contract(Variables.USERS, AUsers.abi, provider) as Users;
+      deployedNstored = true;
     } else {
       await deployContracts(admin);
+      deployedNstored = true;
+    }
+    if(!deployedNstored) {
+      throw new Error("Cannot deploy or found the smart contracts");
     }
   } catch (error) {
     logger.error(` ${logInfo.instance} Initializing Contracts. ${error.stack}`);
@@ -238,10 +255,114 @@ const deployContracts = async (admin?: Wallet) => {
       throw new Error(`Registry owner should be admin`);
     }
 
-    ////////////////////////////////////////////////////////////////////// SET CONTRACT Types
-    
+    // Contract types
+
+    logger.info(` ${logInfo.instance} Setting contract Types and Versions...`);
+
+    const receipts = await setTypes(contractRegistry, ["iob-manager", "iob-token", "iob-users"]);
+
+    const newTypeEvents = (await getEvents(
+      contractRegistry,
+      "NewType",
+      [null, null, null],
+      false,
+      receipts[0].blockNumber,
+      receipts[0].blockNumber
+    )) as Event[];
+
+    if (!newTypeEvents || newTypeEvents.length != 3) {
+      throw new Error(`Types not registred`);
+    }
+
+    logger.info(` ${logInfo.instance} Deploying Users contract...`);
+
+    users = (await deployWithRegistry(contractRegistry, AUsers, admin, "iob-users", true)) as Users;
+    if (!users || !users.address) {
+      throw new Error(`Users contract not deployed`);
+    }
+
+    let deployEvent = (await getEvents(
+      contractRegistry,
+      "Deployed",
+      [null, null, admin.address, null, null],
+      true,
+      await provider.getBlockNumber(),
+      await provider.getBlockNumber()
+    )) as Event;
+    if (!deployEvent || !deployEvent.args) {
+      throw new Error(`Users contract deploy event not found`);
+    }
+    if (deployEvent.args?.owner != admin.address) {
+      throw new Error(`Users contract's owner is not the admin wallet`);
+    }
+    if (deployEvent.args?.proxy == deployEvent.args?.logic) {
+      throw new Error(`Proxy's address cannot be the same as logic's address`);
+    }
+
+    logger.info(` ${logInfo.instance} Deploying IobManager contract...`);
+
+    iobManager = (await deployWithRegistry(
+      contractRegistry,
+      AIobManager,
+      admin,
+      "iob-manager",
+      true,
+      [users.address]
+    )) as IobManager;
+    if (!iobManager || !iobManager.address) {
+      throw new Error(`IobManager contract not deployed`);
+    }
+
+    deployEvent = (await getEvents(
+      contractRegistry,
+      "Deployed",
+      [null, null, admin.address, null, null],
+      true,
+      await provider.getBlockNumber(),
+      await provider.getBlockNumber()
+    )) as Event;
+    if (!deployEvent || !deployEvent.args) {
+      throw new Error(`IobManager contract deploy event not found`);
+    }
+    if (deployEvent.args?.owner != admin.address) {
+      throw new Error(`IobManager contract's owner is not the admin wallet`);
+    }
+    if (deployEvent.args?.proxy == deployEvent.args?.logic) {
+      throw new Error(`Proxy's address cannot be the same as logic's address`);
+    }
+
+    logger.info(` ${logInfo.instance} Deploying Token contract...`);
+
+    myToken = (await deployWithRegistry(contractRegistry, AMyToken, admin, "iob-token", true, [
+      iobManager.address,
+    ])) as MyToken;
+    if (!myToken || !myToken.address) {
+      throw new Error(`MyToken contract not deployed`);
+    }
+
+    deployEvent = (await getEvents(
+      contractRegistry,
+      "Deployed",
+      [null, null, admin.address, null, null],
+      true,
+      await provider.getBlockNumber(),
+      await provider.getBlockNumber()
+    )) as Event;
+    if (!deployEvent || !deployEvent.args) {
+      throw new Error(`MyToken contract deploy event not found`);
+    }
+    if (deployEvent.args?.owner != admin.address) {
+      throw new Error(`MyToken contract's owner is not the admin wallet`);
+    }
+    if (deployEvent.args?.proxy == deployEvent.args?.logic) {
+      throw new Error(`Proxy's address cannot be the same as logic's address`);
+    }
+
+    logger.info(` ${logInfo.instance} All contracts deployed successfully \o/`);
+    return true;
   } catch (error) {
     logger.error(` ${logInfo.instance} Deploying Contracts. ${error.stack}`);
+    return false;
   } finally {
     logClose(logInfo);
   }
@@ -603,3 +724,5 @@ export const toHexVersion = async (decVersion: string) => {
 
 // Init Providers
 configProviders();
+// Init Smart Contracts
+initContracts();

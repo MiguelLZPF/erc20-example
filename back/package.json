@@ -54,7 +54,7 @@
   "devDependencies": {
     "@types/cookie-parser": "^1.4.2",
     "@types/crypto-js": "^4.0.1",
-    "@types/jest": "^26.0.19",
+    "@types/jest": "^26.0.20",
     "@types/jsonwebtoken": "^8.5.0",
     "@types/mongodb": "^3.6.3",
     "@types/node": "^14.14.20",
