@@ -138,30 +138,18 @@ const connectProviders = async (protocol: string, uri: string) => {
 
 const showProviders = async () => {
   const logInfo = logStart("blockchain.ts", "showProviders", "trace");
-  let tokenFound = false;
-  let paapFound = false;
-  try {
-    if (isAddress(Variables.TOKEN_ADDRESS) && isAddress(Variables.PAAP_ADDRESS)) {
-      const token = new Contract(Variables.TOKEN_ADDRESS, PaapToken.abi, provider);
-      const paap = new Contract(Variables.PAAP_ADDRESS, PAAP.abi, provider);
-      if (token && token.address == Variables.TOKEN_ADDRESS) {
-        tokenFound = true;
-      }
-      if (paap && paap.address == Variables.PAAP_ADDRESS) {
-        paapFound = true;
-      }
-    }
-  } catch (error) {
-    logger.error(error);
-  }
+
+  // Init Smart Contracts
+  const initialized = await initContracts();
 
   logger.info(` ${logInfo.instance} Providers connected:
           Ethers: ${logObject(provider.connection.url)}
           
-          Current Token: ${Variables.TOKEN_ADDRESS} (Deployed in Network: ${tokenFound})
-          Current Paap: ${Variables.PAAP_ADDRESS} (Deployed in Network: ${paapFound}) \n`);
-  //logger.debug(` Delegate accounts: [${await provider.listAccounts()}]`)
-  logger.debug(` ${logInfo.instance} Delegate accounts: [${await getDelegateAddrs(10)}]`);
+          Proxy Admin: ${proxyAdmin?.address}
+          Contract Registry: ${contractRegistry?.address}
+          IOB Manager: ${iobManager?.address}
+          My Token: ${myToken?.address}
+          Users: ${users?.address} \n`);
   logClose(logInfo);
 };
 
@@ -194,8 +182,10 @@ const initContracts = async () => {
     if(!deployedNstored) {
       throw new Error("Cannot deploy or found the smart contracts");
     }
+    return deployedNstored;
   } catch (error) {
     logger.error(` ${logInfo.instance} Initializing Contracts. ${error.stack}`);
+    return false;
   } finally {
     logClose(logInfo);
   }
@@ -724,5 +714,3 @@ export const toHexVersion = async (decVersion: string) => {
 
 // Init Providers
 configProviders();
-// Init Smart Contracts
-initContracts();

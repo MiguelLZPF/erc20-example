@@ -1,3 +1,4 @@
+import { PopulatedTransaction } from "ethers";
 import { IAdmin } from "./Admin";
 import { Ires, Ireq } from "./IReqRes";
 
@@ -33,8 +34,8 @@ export interface ISignUp_req extends Ireq {
 
 export interface ISignUp_res extends Ires {
   created: boolean;
-  userAddress?: string;
-  token?: IToken;
+  unsignedTx?: PopulatedTransaction,
+  userId?: string
 }
 // LOGIN
 export interface ILogin_req {

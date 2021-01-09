@@ -51,7 +51,9 @@ export const auth = async (req: Request, res: Response, next: NextFunction) => {
     const data = JSON.parse(await decrypt(verifyRes.data)) as ITokenData;
     if (!data || !data.account) {
       result.message.concat(". Wrong Authorization Token");
-      throw new Error(` ${logInfo.instance} Wrong Authorization Token. Cannot decrypt data. ${data}`);
+      throw new Error(
+        ` ${logInfo.instance} Wrong Authorization Token. Cannot decrypt data. ${data}`
+      );
     }
     logger.info(` ${logInfo.instance} Account "${data.account}" found in token :-)`);
     req.body.senderAccount = data.account;
@@ -78,9 +80,7 @@ export const encrypt = async (value: string) => {
   return CryptoJS.AES.encrypt(value, Constants.CRYPTO_KEY).toString();
 };
 export const decrypt = async (value: string) => {
-  return CryptoJS.AES.decrypt(value, Constants.CRYPTO_KEY).toString(
-    CryptoJS.enc.Utf8
-  );
+  return CryptoJS.AES.decrypt(value, Constants.CRYPTO_KEY).toString(CryptoJS.enc.Utf8);
 };
 export const generateRandom = async (salt?: string) => {
   return salt ? encrypt(salt) : encrypt("password");

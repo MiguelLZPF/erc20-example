@@ -1,5 +1,4 @@
 import * as mongoose from "mongoose";
-import { IToken } from "./Auth";
 import { Ireq, Ires } from "./IReqRes";
 
 /*===================== Mongo =========================*/

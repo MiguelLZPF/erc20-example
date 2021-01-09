@@ -1,4 +1,3 @@
-import ILoan from "./Loan";
 import { Ireq, Ires } from "./IReqRes";
 
 //Interfaces used to define and understand User related data structures
@@ -7,26 +6,13 @@ export type Rol = "borrower" | "investor";
 
 export default interface IUser {
   owner?: string;
-  address: string;
-  username: string;
+  id: string;
+  name: string;
   password?: string;
-  rol: Rol;
-  nombre?:string, 
-  apellidos?: string, 
-  dni?: string, 
-  direccion?: string,
   creationDate?: Date;
-  loans?: ILoan[];
-  investments?: IInvestment[];
+  modifiedDate?: Date;
   balance?:number;
   tokenBalance?:number;
-}
-
-export interface IInvestment {
-  loanAddress: string;
-  amount: number;
-  interest: number;
-  date: Date;
 }
 
 // Get My User
@@ -58,18 +44,6 @@ export interface IGetUserBy_req extends Ireq {
 }
 export interface IGetUserBy_res extends Ires {
   user?: IUser;
-}
-
-// Get Users Investment
-export interface IGetUserInvest_req extends Ireq {}
-export interface IGetUserInvest_res extends Ires {
-  investment?: IInvestment[];
-}
-
-// Get Users Loans
-export interface IGetUserLoans_req extends Ireq {}
-export interface IGetUserLoans_res extends Ires {
-  loans?: ILoan[];
 }
 
 // update user
