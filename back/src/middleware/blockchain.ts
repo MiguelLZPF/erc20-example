@@ -1,7 +1,6 @@
 import {
   ethers,
   ContractFactory,
-  UnsignedTransaction,
   BigNumber,
   Contract,
   FixedNumber,
@@ -28,6 +27,7 @@ import { logger, logStart, logClose, logObject } from "./logger";
 import ExtUser, { IExtUser } from "../models/ExtUser";
 import * as fs from "async-file";
 import { deployWithRegistry, setTypes } from "./registry";
+import { subscribeEvents } from "./events";
 
 export let provider: providers.WebSocketProvider | providers.JsonRpcProvider;
 
@@ -54,47 +54,12 @@ export let users: Users | undefined;
 const configProviders = async () => {
   const logInfo = logStart("blockchain.ts", "configProviders", "trace");
 
-  const web3Opt_rpc = {
-    keepAlive: true,
-    timeout: 20000, // milliseconds,
-    //headers: [{name: 'Access-Control-Allow-Origin', value: '*'},{...}],
-    //withCredentials: false,
-    //agent: {http: http.Agent(...), baseUrl: ''}
-  };
-  const web3Opt_ws = {
-    timeout: 30000, // ms
-
-    // Useful for credentialed urls, e.g: ws://username:password@localhost:8546
-    /* headers: {
-      authorization: "Basic username:password",
-    }, */
-
-    clientConfig: {
-      // Useful if requests are large
-      //maxReceivedFrameSize: 100000000, // bytes - default: 1MiB
-      //maxReceivedMessageSize: 100000000, // bytes - default: 8MiB
-
-      // Useful to keep a connection alive
-      keepalive: true,
-      keepaliveInterval: 60000, // ms
-    },
-
-    // Enable auto reconnection
-    reconnect: {
-      auto: true,
-      delay: 5000, // ms
-      maxAttempts: 20,
-      onTimeout: false,
-    },
-  };
-
   try {
     const protocol = Constants.WEB3_PROTOCOL == "RPC" ? "http" : "ws";
     const ip = Constants.WEB3_IP;
     const port = Constants.WEB3_PORT;
     const route = Constants.WEB3_ROUTE;
     const uri = `${protocol}://${ip}:${port}/${route}`;
-    const options = Constants.WEB3_PROTOCOL == "RPC" ? web3Opt_rpc : web3Opt_ws;
     // Connect Provider with given params
     await connectProviders(protocol, uri);
     if (!provider) {
@@ -155,15 +120,23 @@ const showProviders = async () => {
 
 const initContracts = async () => {
   const logInfo = logStart("blockchain.ts", "initContracts", "info");
+  let subscribed: Promise<boolean> | boolean = false;
   try {
+    // Get admin Wallet
     const admin = (await retrieveWallet(Constants.ADMIN_PATH, Constants.ADMIN_PASSWORD))!;
     let deployedNstored = false;
+    // if addresses defined, get contracts
     if (
       Variables.PROXY_ADMIN &&
+      isAddress(Variables.PROXY_ADMIN) &&
       Variables.CONTRACT_REGISTRY &&
+      isAddress(Variables.CONTRACT_REGISTRY) &&
       Variables.IOB_MANAGER &&
+      isAddress(Variables.IOB_MANAGER) &&
       Variables.MY_TOKEN &&
-      Variables.USERS
+      isAddress(Variables.MY_TOKEN) &&
+      Variables.USERS &&
+      isAddress(Variables.USERS)
     ) {
       proxyAdmin = new Contract(Variables.PROXY_ADMIN, AProxyAdmin.abi, provider) as ProxyAdmin;
       contractRegistry = new Contract(
@@ -176,17 +149,20 @@ const initContracts = async () => {
       users = new Contract(Variables.USERS, AUsers.abi, provider) as Users;
       deployedNstored = true;
     } else {
+      // no addresses defined
       await deployContracts(admin);
       deployedNstored = true;
     }
-    if(!deployedNstored) {
+    if (!deployedNstored) {
       throw new Error("Cannot deploy or found the smart contracts");
     }
+    subscribed = subscribeEvents(proxyAdmin!, contractRegistry!, iobManager!, myToken!, users!);
     return deployedNstored;
   } catch (error) {
     logger.error(` ${logInfo.instance} Initializing Contracts. ${error.stack}`);
     return false;
   } finally {
+    logger.info(` ${logInfo.instance} Subscribed to events: ${await subscribed}`);
     logClose(logInfo);
   }
 };
@@ -565,12 +541,8 @@ export const deployUpgradeable = async (
   }
 };
 
-export const sendTx = async (sTx: string) => {
-  try {
-    return provider.sendTransaction(sTx);
-  } catch (error) {
-    console.error(`ERROR: ${error}`);
-  }
+export const sendTransaction = async (sTx: string) => {
+  return provider.sendTransaction(sTx);
 };
 
 // ================ EVENTS ===================

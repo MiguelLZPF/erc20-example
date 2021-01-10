@@ -1,8 +1,9 @@
+import { Bytes } from "ethers";
 import * as mongoose from "mongoose";
 /*===================== Mongo =========================*/
 
 export interface IExtUser extends mongoose.Document {
-  id: string;
+  id: string | Bytes;
   owner: string;
   username: string;
   balance: number;

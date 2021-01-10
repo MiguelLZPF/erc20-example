@@ -2,7 +2,14 @@ import { Request, Response } from "express";
 import * as jwt from "jsonwebtoken";
 import { Constants, Variables } from "../../utils/config";
 import Admin, { IAdmin } from "../../models/Admin";
-import { ZERO_ADDRESS, TransactionReceipt, iobManager, GAS_OPT } from "../../middleware/blockchain";
+import {
+  ZERO_ADDRESS,
+  TransactionReceipt,
+  iobManager,
+  GAS_OPT,
+  retrieveWallet,
+  iobManager,
+} from "../../middleware/blockchain";
 import {
   IToken,
   ITokenData,
@@ -18,19 +25,17 @@ import {
 import ExtUser, { IExtUser } from "../../models/ExtUser";
 import { Contract } from "ethers";
 import { hash, encryptHash, decrypt, encrypt } from "../../middleware/auth";
-import { isAddress } from "ethers/lib/utils";
+import { Bytes, isAddress } from "ethers/lib/utils";
 import { logger, logStart, logClose, logObject } from "../../middleware/logger";
+import ExtUser from "../../models/ExtUser";
 
 export const signUp = async (req: Request, res: Response) => {
   const logInfo = logStart("authentication/controller.ts", "signUp");
   const body = req.body as ISignUp_req;
   let httpCode = 202;
   let result: ISignUp_res = {
-    created: false,
+    generated: false,
     message: `ERROR: cannot create new User: ${body.username}`,
-  };
-  let leftovers: any = {
-    need: undefined,
   };
 
   try {
@@ -39,11 +44,11 @@ export const signUp = async (req: Request, res: Response) => {
     const encHashPass = encryptHash(body.password);
     // -- end
     // user DB object
-    const userDB = await ExtUser.findOne({ username: body.username });
+    const userDB = (await ExtUser.findOne({ username: body.username })) as IExtUser;
     if (userDB) {
       // User already created in DB
       // -- check if created in blockchain as well
-      const userBC = await iobManager?.callStatic.getMyUser(GAS_OPT);
+      const userBC = await iobManager?.callStatic.getMyUser();
       if (!userBC || !userBC.id) {
         result.message = "ERROR: user is registered in DB but not in Blockchain";
         throw new Error("User is registered in DB but not in Blockchain");
@@ -58,7 +63,7 @@ export const signUp = async (req: Request, res: Response) => {
       }
       httpCode = 200;
       result = {
-        created: true,
+        generated: true,
         message: "WARN: User '" + body.username + "' alrready created",
         userId: userBC.id,
       };
@@ -68,9 +73,7 @@ export const signUp = async (req: Request, res: Response) => {
       logger.info(
         ` ${logInfo.instance} User '${body.username}' not found in database, creating new one`
       );
-      // No user in DB, create a new one
-      // New User in BC and save in DB
-      logger.debug(` ${logInfo.instance} Creating new user...`);
+      // No user in DB, create a new one tx
       // -- generate new user unsigned transaction
       const newUserUnsTx = await iobManager?.populateTransaction.newUser(
         body.username,
@@ -81,26 +84,11 @@ export const signUp = async (req: Request, res: Response) => {
         throw new Error(`Unsigned TX is undefined. Bad unsigned TX creation`);
       }
       newUserUnsTx.from = body.senderAccount;
-      // -- Data Base wihout BC ID
-      const extUser = new ExtUser({
-        owner: body.senderAccount,
-        username: body.username,
-        balance: 10000, // TEST environment
-      });
-      await extUser.save();
-      // check user saved in database
-      const userDB = (await ExtUser.findOne({ username: extUser.username })) as IExtUser;
-      if (!userDB || !userDB.username) {
-        result.message = "ERROR: user not saved in DB";
-        throw new Error(`Cannot find user in database. Bad user creation in DB`);
-      }
-      logger.debug(` ${logInfo.instance} User saved in database`);
-      // -- END
-      httpCode = 201;
+      httpCode = 200;
       result = {
-        created: true,
+        generated: true,
         message:
-          "User registered successfully in the systems DB. WARNING: ypu need to send the signed Transaction using /tx-proxy/send/new-user route",
+          "User sign up Tx generated successfully. WARNING: you need to send the signed Transaction using /tx-proxy/send route",
         unsignedTx: newUserUnsTx,
       };
     }
@@ -260,4 +248,60 @@ export const isAdmin = async (account: string) => {
     logger.error(`ERROR: account not valid or not admin. ${error}`);
   }
   return result;
+};
+
+export const registerUser = async (id: string | Bytes, name: string, password: string) => {
+  const logInfo = logStart("authentication.ts", "storeUser", "info");
+  try {
+    // Get admin Wallet
+    const admin = retrieveWallet(Constants.ADMIN_PATH, Constants.ADMIN_PASSWORD);
+    let userDB = ExtUser.findOne({ id: id });
+    // call the contract with the admin wallet
+    const iobManagerAdmin = iobManager!.connect((await admin)!);
+    const userBC = iobManagerAdmin.callStatic.getUser(id);
+
+    if ((await userDB) as IExtUser) {
+      // User registred in DB
+      if (await userBC) {
+        // User registered in DB and BC
+        // this case should never happen because this is triggered by an UserCreated event
+        throw new Error(`User already registered correctly`);
+      } else {
+        // User registered in DB but not in BC
+        // this case should never happen because this is triggered by an UserCreated event
+        await ExtUser.remove({ id: id });
+        throw new Error(`User registered in DB but not in BC. Removing data from DB`);
+      }
+    } else {
+      // User is not registered in DB
+      // regular use case
+      if (!(await userBC)) {
+        // user not found in DB
+        // this case should never happen because this is triggered by an UserCreated event
+        throw new Error(`User not found in Blockchain`);
+      } else {
+        // regular use case --> UserCreated event, user found un BC and not in DB
+        // register User in DB
+        const extUser = new ExtUser({
+          id: (await userBC).id,
+          owner: (await userBC).owner,
+          username: (await userBC).name,
+          balance: 10000, // TEST environment
+        });
+        await extUser.save();
+        // check all right
+        userDB = (await ExtUser.findOne({ id: extUser.id })) as IExtUser;
+        if (!userDB || !userDB.id || userDB.id != (await userBC).id) {
+          throw new Error(`Cannot check if user is in database`);
+        }
+        logger.info(` ${logInfo.instance} User with ID: ${userDB.id} registered in database`);
+        return true;
+      }
+    }
+  } catch (error) {
+    logger.error(` ${logInfo.instance} Registering user in Database. ${error.stack}`);
+    return false;
+  } finally {
+    logClose(logInfo);
+  }
 };

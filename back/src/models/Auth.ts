@@ -24,16 +24,10 @@ export interface IToken {
 export interface ISignUp_req extends Ireq {
   username: string;
   password: string;
-  rol: string;
-  account?: string;
-  nombre: string;
-  apellidos: string;
-  direccion: string;
-  dni: string;
 }
 
 export interface ISignUp_res extends Ires {
-  created: boolean;
+  generated: boolean;
   unsignedTx?: PopulatedTransaction,
   userId?: string
 }
