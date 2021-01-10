@@ -1,14 +1,13 @@
-import { Transaction } from "ethers";
+import { TransactionReceipt } from "../middleware/blockchain";
 import { Ireq, Ires } from "./IReqRes";
 
 // Send Transaction
 export interface ISendTx_req extends Ireq {
   signedTx: string; // There is no SignedTransaction or similar
-  type?: string;
 }
 export interface ISendTx_res extends Ires {
   sent: boolean;
-  type?: string;
+  receipt?: TransactionReceipt;
   txHash?: string;
   blockHash?: string;
 }

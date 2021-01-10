@@ -1,4 +1,4 @@
-import { PopulatedTransaction } from "ethers";
+import { Bytes, PopulatedTransaction } from "ethers";
 import { IAdmin } from "./Admin";
 import { Ires, Ireq } from "./IReqRes";
 
@@ -21,15 +21,16 @@ export interface IToken {
   expiresIn: number;
 }
 // SIGNUP
-export interface ISignUp_req extends Ireq {
+export interface ISignUp_req {
   username: string;
   password: string;
+  from?: string;
 }
 
 export interface ISignUp_res extends Ires {
   generated: boolean;
   unsignedTx?: PopulatedTransaction,
-  userId?: string
+  //userId?: string | Bytes
 }
 // LOGIN
 export interface ILogin_req {

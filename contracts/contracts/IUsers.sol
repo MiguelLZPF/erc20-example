@@ -30,6 +30,8 @@ interface IUsers {
 
   function getUser(bytes32 _id) external view returns (User memory);
 
+  function getUserByName(string memory _name) external view returns (User memory);
+
   function getUsers(bytes32[] memory _ids) external view returns (User[] memory);
 
   function getAllUsers() external view returns (User[] memory);

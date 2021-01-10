@@ -26,6 +26,7 @@ interface UsersInterface extends ethers.utils.Interface {
     "editUser(bytes32,string,string)": FunctionFragment;
     "getAllUsers()": FunctionFragment;
     "getUser(bytes32)": FunctionFragment;
+    "getUserByName(string)": FunctionFragment;
     "getUsers(bytes32[])": FunctionFragment;
     "initManager()": FunctionFragment;
     "initialize()": FunctionFragment;
@@ -48,6 +49,10 @@ interface UsersInterface extends ethers.utils.Interface {
     values?: undefined
   ): string;
   encodeFunctionData(functionFragment: "getUser", values: [BytesLike]): string;
+  encodeFunctionData(
+    functionFragment: "getUserByName",
+    values: [string]
+  ): string;
   encodeFunctionData(
     functionFragment: "getUsers",
     values: [BytesLike[]]
@@ -81,6 +86,10 @@ interface UsersInterface extends ethers.utils.Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "getUser", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "getUserByName",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "getUsers", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "initManager",
@@ -191,6 +200,38 @@ export class Users extends Contract {
 
     "getUser(bytes32)"(
       _id: BytesLike,
+      overrides?: CallOverrides
+    ): Promise<
+      [
+        [string, string, string, string, BigNumber, BigNumber] & {
+          id: string;
+          owner: string;
+          name: string;
+          password: string;
+          dateCreated: BigNumber;
+          dateModified: BigNumber;
+        }
+      ]
+    >;
+
+    getUserByName(
+      _name: string,
+      overrides?: CallOverrides
+    ): Promise<
+      [
+        [string, string, string, string, BigNumber, BigNumber] & {
+          id: string;
+          owner: string;
+          name: string;
+          password: string;
+          dateCreated: BigNumber;
+          dateModified: BigNumber;
+        }
+      ]
+    >;
+
+    "getUserByName(string)"(
+      _name: string,
       overrides?: CallOverrides
     ): Promise<
       [
@@ -356,6 +397,34 @@ export class Users extends Contract {
     }
   >;
 
+  getUserByName(
+    _name: string,
+    overrides?: CallOverrides
+  ): Promise<
+    [string, string, string, string, BigNumber, BigNumber] & {
+      id: string;
+      owner: string;
+      name: string;
+      password: string;
+      dateCreated: BigNumber;
+      dateModified: BigNumber;
+    }
+  >;
+
+  "getUserByName(string)"(
+    _name: string,
+    overrides?: CallOverrides
+  ): Promise<
+    [string, string, string, string, BigNumber, BigNumber] & {
+      id: string;
+      owner: string;
+      name: string;
+      password: string;
+      dateCreated: BigNumber;
+      dateModified: BigNumber;
+    }
+  >;
+
   getUsers(
     _ids: BytesLike[],
     overrides?: CallOverrides
@@ -500,6 +569,34 @@ export class Users extends Contract {
       }
     >;
 
+    getUserByName(
+      _name: string,
+      overrides?: CallOverrides
+    ): Promise<
+      [string, string, string, string, BigNumber, BigNumber] & {
+        id: string;
+        owner: string;
+        name: string;
+        password: string;
+        dateCreated: BigNumber;
+        dateModified: BigNumber;
+      }
+    >;
+
+    "getUserByName(string)"(
+      _name: string,
+      overrides?: CallOverrides
+    ): Promise<
+      [string, string, string, string, BigNumber, BigNumber] & {
+        id: string;
+        owner: string;
+        name: string;
+        password: string;
+        dateCreated: BigNumber;
+        dateModified: BigNumber;
+      }
+    >;
+
     getUsers(
       _ids: BytesLike[],
       overrides?: CallOverrides
@@ -609,6 +706,13 @@ export class Users extends Contract {
       overrides?: CallOverrides
     ): Promise<BigNumber>;
 
+    getUserByName(_name: string, overrides?: CallOverrides): Promise<BigNumber>;
+
+    "getUserByName(string)"(
+      _name: string,
+      overrides?: CallOverrides
+    ): Promise<BigNumber>;
+
     getUsers(_ids: BytesLike[], overrides?: CallOverrides): Promise<BigNumber>;
 
     "getUsers(bytes32[])"(
@@ -693,6 +797,16 @@ export class Users extends Contract {
 
     "getUser(bytes32)"(
       _id: BytesLike,
+      overrides?: CallOverrides
+    ): Promise<PopulatedTransaction>;
+
+    getUserByName(
+      _name: string,
+      overrides?: CallOverrides
+    ): Promise<PopulatedTransaction>;
+
+    "getUserByName(string)"(
+      _name: string,
       overrides?: CallOverrides
     ): Promise<PopulatedTransaction>;
 

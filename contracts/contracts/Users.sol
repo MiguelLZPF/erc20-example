@@ -16,14 +16,19 @@ contract Users is Ownable {
   // PROPERTIES
   // IobManager's account
   address internal iobManager;
+
+  // flag to mark the initialization state of the contract
+  bool internal initComplete;
+
   // array for all access
   User[] internal usersA;
   // maps the id with array's index
   mapping(bytes32 => uint256) internal usersI;
   // sets valid index for array
   mapping(bytes32 => bool) internal usersV;
-  // flag to mark the initialization state of the contract
-  bool internal initComplete;
+
+  // maps the user's name with the user's id;
+  mapping(string => bytes32) internal nameToUser;
 
   // FUNCTIONS
   /**
@@ -44,10 +49,11 @@ contract Users is Ownable {
     string memory _password,
     address _owner
   ) public userInputReq(_name, _password) onlyManager returns (bytes32) {
+    require(nameToUser[_name] == bytes32(0), "User name already in use");
     uint256 blockTime = block.timestamp;
     // identifier generated from _name, timestamp and tx.origin
     bytes32 id = S.hash(string(abi.encodePacked(_name, blockTime, tx.origin)));
-    require(!usersV[id], "User name already in use");
+    require(!usersV[id], "User ID already in use");
     // create new user
     User memory user;
     user.id = id;
@@ -60,6 +66,7 @@ contract Users is Ownable {
     usersA.push(user);
     usersI[id] = usersA.length - 1;
     usersV[id] = true;
+    nameToUser[_name] = id;
 
     return id;
   }
@@ -71,16 +78,25 @@ contract Users is Ownable {
   ) public userInputReq(_newName, _newPass) onlyManager {
     require(usersV[_id], "This user does not exist");
 
+    // get actual user
     User memory user = usersA[usersI[_id]];
+    // remove old name mapping
+    nameToUser[user.name] = bytes32(0);
+    // update user
     user.name = _newName;
     user.password = _newPass;
     user.dateModified = block.timestamp;
     // update stored user
     usersA[usersI[_id]] = user;
+    // create new name mapping
+    nameToUser[_newName] = _id;
   }
 
   function deleteUser(bytes32 _id) public onlyManager {
     require(usersV[_id], "This user does not exist");
+
+    // remove name mapping
+    nameToUser[usersA[usersI[_id]].name] = bytes32(0);
 
     // overwrite last element of the array to this id
     User memory lastUser = usersA[usersA.length - 1];
@@ -96,6 +112,10 @@ contract Users is Ownable {
   function getUser(bytes32 _id) public view onlyManager returns (User memory) {
     require(usersV[_id], "User not stored yet or not found");
     return usersA[usersI[_id]];
+  }
+
+  function getUserByName(string memory _name) public view onlyManager returns (User memory) {
+    return getUser(nameToUser[_name]);
   }
 
   function getUsers(bytes32[] memory _ids) public view onlyManager returns (User[] memory) {

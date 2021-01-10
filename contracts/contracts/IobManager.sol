@@ -87,6 +87,10 @@ contract IobManager is Ownable {
     return users.getUser(ownerToUser[_owner]);
   }
 
+  function getUserByName(string memory _name) external view onlyOwner returns (User memory) {
+    return users.getUserByName(_name);
+  }
+
   function getAllUsers() public view onlyOwner returns (User[] memory) {
     return users.getAllUsers();
   }

@@ -1,3 +1,4 @@
+import { isAddress } from "ethers/lib/utils";
 import { Request, Response, NextFunction } from "express";
 import { logger, logStart, logClose } from "../../middleware/logger";
 import { IAdminLogin_res, ISignUp_req, ILogin_res, ISignUp_res } from "../../models/Auth";
@@ -42,15 +43,11 @@ export const check_signUp = async (
   let httpCode = 400;
   const body = req.body as ISignUp_req;
   let result: ISignUp_res = {
-    created: false,
+    generated: false,
     message: "PARAM ERROR: cannot create new user with given parameters"
   }
 
   try {
-    if(!body.senderAccount) {
-      result.message = result.message.concat(". Cannot find account in token");
-      throw new Error(`senderAccount not given by auth middleware`);
-    }
     if(!body.username) {
       result.message = result.message.concat(". Username must be provided in request's body");
       throw new Error(`username not provided in body.username`);
@@ -58,6 +55,10 @@ export const check_signUp = async (
     if(!body.password) {
       result.message = result.message.concat(". Password must be provided in request's body");
       throw new Error(`password not provided in body.password`);
+    }
+    if(body.from && !isAddress(body.from)) {
+      result.message = result.message.concat(". From account must be a valid address");
+      throw new Error(`from account not valid in body.from`);
     }
     logger.debug(` ${logInfo.instance} All parameters checked correctly`);
     next();

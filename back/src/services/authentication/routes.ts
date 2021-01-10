@@ -7,7 +7,7 @@ export default [
   {
     path: `${Constants.ROOT}/users`,
     method: "post",
-    handler: [auth, check_signUp, signUp],
+    handler: [check_signUp, signUp],
   },
   {
     path: `${Constants.ROOT}/login`,

@@ -42,40 +42,46 @@ export const signUp = async (req: Request, res: Response) => {
     // async flows
     // -- encrypt(hash("password"))
     const encHashPass = encryptHash(body.password);
+    // Get admin Wallet
+    const admin = retrieveWallet(Constants.ADMIN_PATH, Constants.ADMIN_PASSWORD);
     // -- end
+
+    const userBCowner = body.from
+      ? iobManager!.connect(body.from).callStatic.getMyUser()
+      : undefined;
+    const userBCname = iobManager!.connect((await admin)!).callStatic.getUserByName(body.username);
     // user DB object
     const userDB = (await ExtUser.findOne({ username: body.username })) as IExtUser;
     if (userDB) {
       // User already created in DB
-      // -- check if created in blockchain as well
-      const userBC = await iobManager?.callStatic.getMyUser();
-      if (!userBC || !userBC.id) {
-        result.message = "ERROR: user is registered in DB but not in Blockchain";
-        throw new Error("User is registered in DB but not in Blockchain");
-      }
       // -- user created in Blockchian and DB
       logger.info(
         ` ${logInfo.instance} User '${userDB.username}' already created in blockchain and database`
       );
-      if (userBC.id != userDB.id) {
-        result.message = "ERROR: user SC address missmatch from DB and Blockchain";
-        throw new Error("user SC address missmatch from DB and Blockchain");
-      }
+      // return user data
       httpCode = 200;
-      result = {
-        generated: true,
-        message: "WARN: User '" + body.username + "' alrready created",
-        userId: userBC.id,
-      };
+      result.generated = true;
+      result.message = "WARNING: User '" + body.username + "' alrready created";
+      //result.userId = userDB.id;
       // -- END
     } else {
       // if no user, create new
       logger.info(
         ` ${logInfo.instance} User '${body.username}' not found in database, creating new one`
       );
+      // Check if username already exists and from account does not have any user
+      if ((await userBCowner) && (await userBCowner)?.id) {
+        result.message = result.message.concat(". From account already have a user registered");
+        throw new Error(`From account already have a user registered`);
+      }
+      if ((await userBCname) && (await userBCname)?.id) {
+        result.message = result.message.concat(". Username already used");
+        throw new Error(`Username already used`);
+      }
       // No user in DB, create a new one tx
       // -- generate new user unsigned transaction
-      const newUserUnsTx = await iobManager?.populateTransaction.newUser(
+      const iobManagerFrom = body.from ? iobManager!.connect(body.from) : iobManager!;
+      const newUserUnsTx = await iobManagerFrom.populateTransaction.newUser(
         body.username,
         await encHashPass
       );
@@ -83,14 +89,12 @@ export const signUp = async (req: Request, res: Response) => {
         result.message = "ERROR: bad unsigned TX creation";
         throw new Error(`Unsigned TX is undefined. Bad unsigned TX creation`);
       }
-      newUserUnsTx.from = body.senderAccount;
       httpCode = 200;
-      result = {
-        generated: true,
-        message:
-          "User sign up Tx generated successfully. WARNING: you need to send the signed Transaction using /tx-proxy/send route",
-        unsignedTx: newUserUnsTx,
-      };
+      result.generated = true;
+      result.message =
+        "User sign up Tx generated successfully." +
+        "WARNING: you need to send the signed Transaction using POST /tx-proxy/send route";
+      result.unsignedTx = newUserUnsTx;
     }
   } catch (error) {
     logger.error(` ${logInfo.instance} ERROR Creating new User "${body.username}". ${error.stack}`);
@@ -110,19 +114,21 @@ export const login = async (req: Request, res: Response) => {
   };
   try {
     // Async stuff
+    // Get admin Wallet
+    const admin = retrieveWallet(Constants.ADMIN_PATH, Constants.ADMIN_PASSWORD);
     const hashPass = hash(body.password);
 
-    const userDB = await ExtUser.findOne({ username: body.username });
-    if (!userDB || !isAddress(userDB.account)) {
+    const userDB = (await ExtUser.findOne({ username: body.username })) as IExtUser;
+    if (!userDB || !userDB.id) {
       result.message = "ERROR: user '" + body.username + "' or password does not match";
       throw new Error(
-        `username '${body.username}' not found in DB or account address is not valid`
+        `username '${body.username}' not found in DB`
       );
     }
-    const userBC = getUserInstance(userDB.userAddress);
-    const token = createToken(userDB.account);
+    const userBC = await iobManager!.connect((await admin)!).callStatic.getUserByName(body.username);
+    const token = createToken(userBC.owner);
 
-    const passBC = await decrypt(await callStatic(await userBC, "getPassword", userDB.account));
+    const passBC = await decrypt(userBC.password);
     if ((await hashPass) != passBC) {
       result.message = "ERROR: user '" + body.username + "' or password does not match";
       throw new Error(`Password stored in BC and password provided does NOT match.
@@ -148,46 +154,6 @@ export const login = async (req: Request, res: Response) => {
     logClose(logInfo);
     res.status(httpCode).send(result);
   }
-};
-
-export const adminLogin = async (req: Request, res: Response) => {
-  const logInfo = logStart("admin/controller.ts", "adminLogin");
-  const body: IAdminLogin_req = req.body;
-  let httpCode = 202;
-  let result: IAdminLogin_res = {
-    login: false,
-    message: "ERROR: couldn't login with the admin user",
-  };
-
-  try {
-    // async flows
-    const hashedPass = hash(body.password);
-
-    const actualAdmin = await Admin.findOne({ username: body.username });
-    if (!actualAdmin || !actualAdmin._id) {
-      result.message = "ERROR: admin not found";
-      throw new Error(`admin not found with username: ${body.username}`);
-    }
-    const actualHashPass = decrypt(actualAdmin.password);
-    const token = createToken(actualAdmin.account);
-    // @notice if found by username there is no need to check if they are equal
-    if ((await hashedPass) != (await actualHashPass)) {
-      result.message = "ERROR: actual admin's username or password does not match";
-      throw new Error(`Actual admin's password and provided password does not match`);
-    }
-    httpCode = 200;
-    res.setHeader(
-      "Set-Cookie",
-      `Authorization=${(await token).JWToken};` + `Max-Age=${(await token).expiresIn}`
-    );
-    result.login = true;
-    result.token = await token;
-    result.message = "Admin user login sucessfully";
-  } catch (error) {
-    logger.error(` ${logInfo.instance} ERROR login with Admin User. ${error.stack}`);
-  }
-  logClose(logInfo);
-  res.status(httpCode).send(result);
 };
 
 // Non HTTP methods
@@ -222,32 +188,6 @@ export const createToken = async (account: string, hours?: number): Promise<ITok
     }),
     expiresIn: expTime,
   };
-};
-
-export const isAdmin = async (account: string) => {
-  let result: IisAdmin_res = {
-    isAdmin: false,
-    message: "ERROR: performing isAdmin check",
-  };
-  try {
-    if (!isAddress(account)) {
-      result.message = "ERROR: account provided is not a valid address";
-      throw new Error("account provided is not a valid address");
-    }
-    // look for an admin with the given account
-    const admin = await Admin.findOne({ account: account });
-    // if no one is found then is not an admin, could be a normal user...
-    if (!admin || !admin._id) {
-      result.message = "ERROR: account provided is not admin. " + "Only admin can see Users";
-      throw new Error("account provided is not admin. " + "Only admin can see Users");
-    }
-    result.isAdmin = true;
-    result.admin = admin;
-    result.message = "Account is a registered Admin user";
-  } catch (error) {
-    logger.error(`ERROR: account not valid or not admin. ${error}`);
-  }
-  return result;
 };
 
 export const registerUser = async (id: string | Bytes, name: string, password: string) => {

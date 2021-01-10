@@ -28,6 +28,7 @@ interface IobManagerInterface extends ethers.utils.Interface {
     "getAllUsers()": FunctionFragment;
     "getMyUser()": FunctionFragment;
     "getUser(bytes32)": FunctionFragment;
+    "getUserByName(string)": FunctionFragment;
     "getUserByOwner(address)": FunctionFragment;
     "initToken()": FunctionFragment;
     "initialize(address)": FunctionFragment;
@@ -57,6 +58,10 @@ interface IobManagerInterface extends ethers.utils.Interface {
   ): string;
   encodeFunctionData(functionFragment: "getMyUser", values?: undefined): string;
   encodeFunctionData(functionFragment: "getUser", values: [BytesLike]): string;
+  encodeFunctionData(
+    functionFragment: "getUserByName",
+    values: [string]
+  ): string;
   encodeFunctionData(
     functionFragment: "getUserByOwner",
     values: [string]
@@ -94,6 +99,10 @@ interface IobManagerInterface extends ethers.utils.Interface {
   ): Result;
   decodeFunctionResult(functionFragment: "getMyUser", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "getUser", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "getUserByName",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(
     functionFragment: "getUserByOwner",
     data: BytesLike
@@ -262,6 +271,38 @@ export class IobManager extends Contract {
 
     "getUser(bytes32)"(
       _id: BytesLike,
+      overrides?: CallOverrides
+    ): Promise<
+      [
+        [string, string, string, string, BigNumber, BigNumber] & {
+          id: string;
+          owner: string;
+          name: string;
+          password: string;
+          dateCreated: BigNumber;
+          dateModified: BigNumber;
+        }
+      ]
+    >;
+
+    getUserByName(
+      _name: string,
+      overrides?: CallOverrides
+    ): Promise<
+      [
+        [string, string, string, string, BigNumber, BigNumber] & {
+          id: string;
+          owner: string;
+          name: string;
+          password: string;
+          dateCreated: BigNumber;
+          dateModified: BigNumber;
+        }
+      ]
+    >;
+
+    "getUserByName(string)"(
+      _name: string,
       overrides?: CallOverrides
     ): Promise<
       [
@@ -495,6 +536,34 @@ export class IobManager extends Contract {
     }
   >;
 
+  getUserByName(
+    _name: string,
+    overrides?: CallOverrides
+  ): Promise<
+    [string, string, string, string, BigNumber, BigNumber] & {
+      id: string;
+      owner: string;
+      name: string;
+      password: string;
+      dateCreated: BigNumber;
+      dateModified: BigNumber;
+    }
+  >;
+
+  "getUserByName(string)"(
+    _name: string,
+    overrides?: CallOverrides
+  ): Promise<
+    [string, string, string, string, BigNumber, BigNumber] & {
+      id: string;
+      owner: string;
+      name: string;
+      password: string;
+      dateCreated: BigNumber;
+      dateModified: BigNumber;
+    }
+  >;
+
   getUserByOwner(
     _owner: string,
     overrides?: CallOverrides
@@ -707,6 +776,34 @@ export class IobManager extends Contract {
       }
     >;
 
+    getUserByName(
+      _name: string,
+      overrides?: CallOverrides
+    ): Promise<
+      [string, string, string, string, BigNumber, BigNumber] & {
+        id: string;
+        owner: string;
+        name: string;
+        password: string;
+        dateCreated: BigNumber;
+        dateModified: BigNumber;
+      }
+    >;
+
+    "getUserByName(string)"(
+      _name: string,
+      overrides?: CallOverrides
+    ): Promise<
+      [string, string, string, string, BigNumber, BigNumber] & {
+        id: string;
+        owner: string;
+        name: string;
+        password: string;
+        dateCreated: BigNumber;
+        dateModified: BigNumber;
+      }
+    >;
+
     getUserByOwner(
       _owner: string,
       overrides?: CallOverrides
@@ -894,6 +991,13 @@ export class IobManager extends Contract {
       overrides?: CallOverrides
     ): Promise<BigNumber>;
 
+    getUserByName(_name: string, overrides?: CallOverrides): Promise<BigNumber>;
+
+    "getUserByName(string)"(
+      _name: string,
+      overrides?: CallOverrides
+    ): Promise<BigNumber>;
+
     getUserByOwner(
       _owner: string,
       overrides?: CallOverrides
@@ -1024,6 +1128,16 @@ export class IobManager extends Contract {
 
     "getUser(bytes32)"(
       _id: BytesLike,
+      overrides?: CallOverrides
+    ): Promise<PopulatedTransaction>;
+
+    getUserByName(
+      _name: string,
+      overrides?: CallOverrides
+    ): Promise<PopulatedTransaction>;
+
+    "getUserByName(string)"(
+      _name: string,
       overrides?: CallOverrides
     ): Promise<PopulatedTransaction>;
 
