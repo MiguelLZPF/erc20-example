@@ -1,5 +1,6 @@
-import { Bytes, Event } from "ethers";
+import { BigNumber, Bytes, Event } from "ethers";
 import { registerUser } from "../services/authentication/controller";
+import { deposit } from "../services/exchange/controller";
 import { ContractRegistry, IobManager, MyToken, ProxyAdmin, Users } from "../typechain";
 import { logClose, logger, logStart } from "./logger";
 
@@ -30,5 +31,12 @@ const subsUserCreated = async (iobManager: IobManager) => {
   const filter = iobManager.filters.UserCreated(null, null, null);
   iobManager.on(filter, async (id: string | Bytes, name: string, password: string) => {
     await registerUser(id, name, password);
+  });
+};
+
+const subsDeposit = async (iobManager: IobManager) => {
+  const filter = iobManager.filters.Deposit(null, null);
+  iobManager.on(filter, async (recipient: string, amount: BigNumber) => {
+    await deposit(recipient, amount);
   });
 };

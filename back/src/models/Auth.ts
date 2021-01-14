@@ -28,7 +28,7 @@ export interface ISignUp_req {
 }
 
 export interface ISignUp_res extends Ires {
-  generated: boolean;
+  //generated: boolean;
   unsignedTx?: PopulatedTransaction,
   //userId?: string | Bytes
 }

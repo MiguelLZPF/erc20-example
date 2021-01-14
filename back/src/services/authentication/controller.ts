@@ -1,40 +1,26 @@
 import { Request, Response } from "express";
 import * as jwt from "jsonwebtoken";
-import { Constants, Variables } from "../../utils/config";
-import Admin, { IAdmin } from "../../models/Admin";
-import {
-  ZERO_ADDRESS,
-  TransactionReceipt,
-  iobManager,
-  GAS_OPT,
-  retrieveWallet,
-  iobManager,
-} from "../../middleware/blockchain";
+import { Constants } from "../../utils/config";
+import { retrieveWallet, iobManager } from "../../middleware/blockchain";
 import {
   IToken,
   ITokenData,
-  IisAdmin_res,
   ISignUp_req,
   ISignUp_res,
   ILogin_req,
   ILogin_res,
-  IAdminLogin_req,
-  IAdminLogin_res,
   ITokenPayload,
 } from "../../models/Auth";
 import ExtUser, { IExtUser } from "../../models/ExtUser";
-import { Contract } from "ethers";
 import { hash, encryptHash, decrypt, encrypt } from "../../middleware/auth";
-import { Bytes, isAddress } from "ethers/lib/utils";
-import { logger, logStart, logClose, logObject } from "../../middleware/logger";
-import ExtUser from "../../models/ExtUser";
+import { Bytes } from "ethers/lib/utils";
+import { logger, logStart, logClose } from "../../middleware/logger";
 
 export const signUp = async (req: Request, res: Response) => {
   const logInfo = logStart("authentication/controller.ts", "signUp");
   const body = req.body as ISignUp_req;
   let httpCode = 202;
   let result: ISignUp_res = {
-    generated: false,
     message: `ERROR: cannot create new User: ${body.username}`,
   };
 
@@ -90,7 +76,6 @@ export const signUp = async (req: Request, res: Response) => {
         throw new Error(`Unsigned TX is undefined. Bad unsigned TX creation`);
       }
       httpCode = 200;
-      result.generated = true;
       result.message =
         "User sign up Tx generated successfully." +
         "WARNING: you need to send the signed Transaction using POST /tx-proxy/send route";
@@ -121,11 +106,11 @@ export const login = async (req: Request, res: Response) => {
     const userDB = (await ExtUser.findOne({ username: body.username })) as IExtUser;
     if (!userDB || !userDB.id) {
       result.message = "ERROR: user '" + body.username + "' or password does not match";
-      throw new Error(
-        `username '${body.username}' not found in DB`
-      );
+      throw new Error(`username '${body.username}' not found in DB`);
     }
-    const userBC = await iobManager!.connect((await admin)!).callStatic.getUserByName(body.username);
+    const userBC = await iobManager!
+      .connect((await admin)!)
+      .callStatic.getUserByName(body.username);
     const token = createToken(userBC.owner);
 
     const passBC = await decrypt(userBC.password);
