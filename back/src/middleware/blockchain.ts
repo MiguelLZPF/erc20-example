@@ -10,7 +10,6 @@ import {
   Event,
 } from "ethers";
 import { Constants, Variables } from "./../utils/config";
-import Admin, { IAdmin } from "../models/Admin";
 import { ProxyAdmin } from "../typechain/ProxyAdmin";
 import { ContractRegistry } from "../typechain/ContractRegistry";
 import { IobManager } from "../typechain/IobManager";
@@ -20,11 +19,10 @@ import * as AProxyAdmin from "./../artifacts/@openzeppelin/contracts/proxy/Proxy
 import * as ATUP from "./../artifacts/@openzeppelin/contracts/proxy/TransparentUpgradeableProxy.sol/TransparentUpgradeableProxy.json";
 import * as AContractRegistry from "./../artifacts/contracts/ContractRegistry.sol/ContractRegistry.json";
 import * as AIobManager from "./../artifacts/contracts/IobManager.sol/IobManager.json";
-import * as AUsers from "./../artifacts/contracts/IUsers.sol/IUsers.json";
+import * as AUsers from "./../artifacts/contracts/Users.sol/Users.json";
 import * as AMyToken from "./../artifacts/contracts/MyToken.sol/MyToken.json";
-import { FunctionFragment, hexlify, isAddress } from "ethers/lib/utils";
+import { hexlify, isAddress } from "ethers/lib/utils";
 import { logger, logStart, logClose, logObject } from "./logger";
-import ExtUser, { IExtUser } from "../models/ExtUser";
 import * as fs from "async-file";
 import { deployWithRegistry, setTypes } from "./registry";
 import { subscribeEvents } from "./events";
@@ -41,7 +39,7 @@ export interface IUnlockRes {
 // decimals used in Blockchain
 export const DECIMALS = 18;
 // address 0x00000... (bytes20) to compare
-export const ZERO_ADDRESS = hexlify({ length: 20 });
+//export const ZERO_ADDRESS = hexlify({ length: 20 });
 const MAX_GAS_LIMIT = BigNumber.from("0x23c3ffff"); //("0x23C34600"); // 600000000
 export const GAS_OPT = { gasPrice: "0x00", gasLimit: "0x23c3ffff" };
 
@@ -62,20 +60,10 @@ const configProviders = async () => {
     const uri = `${protocol}://${ip}:${port}/${route}`;
     // Connect Provider with given params
     await connectProviders(protocol, uri);
-    if (!provider) {
+    if (!provider || !provider._isProvider) {
       throw new Error(` ${logInfo.instance} Provider not connected`);
     }
-    // Show warning if not Alastria
-    if (ip != "34.249.142.75") {
-      logger.warn(` ${logInfo.instance} Not using ALASTRIA T network. Using '${ip}' network`);
-    } else {
-      logger.info(` ${logInfo.instance} Using ALASTRIA T Network :-) (Be patient...)`);
-    }
-    provider.on("reconnect", async () => {
-      // Conect Provider with given params
-      connectProviders(protocol, uri);
-      logger.warn(`RECONNECTING PROVIDERS...`);
-    });
+    console.log(provider._events)
   } catch (e) {
     logger.error(` ${logInfo.instance} Configuring Provider. ${e.stack}`);
   } finally {
@@ -93,6 +81,18 @@ const connectProviders = async (protocol: string, uri: string) => {
       //// ETHERS JS PROVIDER
       provider = new ethers.providers.WebSocketProvider(uri);
     }
+    /* provider.on("reconnect", () => {
+      // Conect Provider with given params
+      connectProviders(protocol, uri);
+      logger.warn(`RECONNECTING PROVIDERS...`);
+    }); */
+    provider.on("error", function(tx) {
+      console.log(`Blockchain error: ${tx}`)
+    })
+    provider.on("block", (BlockNumber) => {
+      console.log(`New Block mined: ${BlockNumber}`);
+    })
+    
     showProviders();
   } catch (error) {
     logger.error(` ${logInfo.instance} Connecting Providers. ${error.stack}`);
@@ -104,17 +104,57 @@ const connectProviders = async (protocol: string, uri: string) => {
 const showProviders = async () => {
   const logInfo = logStart("blockchain.ts", "showProviders", "trace");
 
+  // Fund wallets with ether
+  await fundWallets();
   // Init Smart Contracts
   const initialized = await initContracts();
 
-  logger.info(` ${logInfo.instance} Providers connected:
+  logger.info(` ${logInfo.instance}
+  Providers connected:
           Ethers: ${logObject(provider.connection.url)}
-          
+  Contracts initialized (${initialized}):
           Proxy Admin: ${proxyAdmin?.address}
           Contract Registry: ${contractRegistry?.address}
           IOB Manager: ${iobManager?.address}
           My Token: ${myToken?.address}
           Users: ${users?.address} \n`);
+  logClose(logInfo);
+};
+
+const fundWallets = async () => {
+  const logInfo = logStart("blockchain.ts", "fundWallets", "info");
+  for (let i = 0; i < 3; i++) {
+    const signer = provider.getSigner(i);
+    await signer.unlock("");
+    if (i == 0) {
+      const admin = (await retrieveWallet(Constants.ADMIN_PATH, Constants.ADMIN_PASSWORD))!;
+      if (((await toNumber(await admin.getBalance())) as number) < 10) {
+        await signer.sendTransaction({
+          to: admin.address,
+          value: BigNumber.from("0x56BC75E2D63100000"), //100 eth
+        });
+        logger.info(` ${logInfo.instance} Wallet ${admin.address} founded with 100 ETH`);
+      }
+    } else if (i == 1) {
+      const user00 = (await retrieveWallet("./src/keystore/user_00.json", "password"))!;
+      if (((await toNumber(await user00.getBalance())) as number) < 10) {
+        await signer.sendTransaction({
+          to: user00.address,
+          value: BigNumber.from("0x56BC75E2D63100000"), //100 eth
+        });
+        logger.info(` ${logInfo.instance} Wallet ${user00.address} founded with 100 ETH`);
+      }
+    } else if (i == 2) {
+      const user01 = (await retrieveWallet("./src/keystore/user_01.json", "password"))!;
+      if (((await toNumber(await user01.getBalance())) as number) < 10) {
+        await signer.sendTransaction({
+          to: user01.address,
+          value: BigNumber.from("0x56BC75E2D63100000"), //100 eth
+        });
+        logger.info(` ${logInfo.instance} Wallet ${user01.address} founded with 100 ETH`);
+      }
+    }
+  }
   logClose(logInfo);
 };
 
@@ -226,14 +266,13 @@ const deployContracts = async (admin?: Wallet) => {
     logger.info(` ${logInfo.instance} Setting contract Types and Versions...`);
 
     const receipts = await setTypes(contractRegistry, ["iob-manager", "iob-token", "iob-users"]);
-
     const newTypeEvents = (await getEvents(
       contractRegistry,
       "NewType",
       [null, null, null],
       false,
       receipts[0].blockNumber,
-      receipts[0].blockNumber
+      receipts[2].blockNumber
     )) as Event[];
 
     if (!newTypeEvents || newTypeEvents.length != 3) {

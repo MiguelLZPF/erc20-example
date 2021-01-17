@@ -1,6 +1,5 @@
-import { Bytes, PopulatedTransaction } from "ethers";
-import { IAdmin } from "./Admin";
-import { Ires, Ireq } from "./IReqRes";
+import { PopulatedTransaction } from "ethers";
+import { Ires } from "./IReqRes";
 
 // Token
 export interface ITokenData {
@@ -29,7 +28,7 @@ export interface ISignUp_req {
 
 export interface ISignUp_res extends Ires {
   //generated: boolean;
-  unsignedTx?: PopulatedTransaction,
+  unsignedTx?: PopulatedTransaction;
   //userId?: string | Bytes
 }
 // LOGIN
@@ -41,19 +40,4 @@ export interface ILogin_req {
 export interface ILogin_res extends Ires {
   login: boolean;
   token?: IToken;
-}
-// Admin Login
-export interface IAdminLogin_req {
-  username: string;
-  password: string;
-}
-
-export interface IAdminLogin_res extends Ires {
-  login: boolean;
-  token?: IToken;
-}
-// is Admin
-export interface IisAdmin_res extends Ires {
-  isAdmin: boolean;
-  admin?: IAdmin;
 }

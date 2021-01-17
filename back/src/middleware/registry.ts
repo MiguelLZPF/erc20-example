@@ -170,7 +170,7 @@ export const deployWithRegistry = async (
     // Main Logic
     const factory = new ContractFactory(artifact.abi, artifact.bytecode, from);
     const initData = factory.interface.encodeFunctionData("initialize", [...initParams]);
-    console.log(`Deploying Contract ${artifact.contractName}(${initParams}) from '${from}'`);
+    console.log(`Deploying Contract ${artifact.contractName}(${initParams}) from '${from.address}'`);
     const receipt = await ((await registry.deployContract(
       factory.bytecode,
       initData,
@@ -178,13 +178,13 @@ export const deployWithRegistry = async (
       type,
       GAS_OPT
     )) as TransactionResponse).wait();
-
+  
     //get event and contract
     if (wantContract || !wantContract) {
       const deployEvent = (await getEvents(
         registry,
         "Deployed",
-        [null, null, from, type, null, null],
+        [null, null, from.address, type, null, null],
         true,
         receipt.blockNumber,
         receipt.blockNumber

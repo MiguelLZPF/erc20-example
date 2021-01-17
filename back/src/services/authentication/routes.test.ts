@@ -1,63 +1,68 @@
-import express, { Router } from "express";
-import { Constants } from "../../utils/config";
+//import server from "../../server";
+import express from "express";
+import http from "http";
+import * as chai from "chai";
+import chaiHttp = require("chai-http");
+import "mocha";
 import request from "supertest";
-import { applyMiddleware, applyRoutes } from "../../utils";
-import promiseRequest from "request-promise";
 import middleware from "../../middleware";
-import errorHandlers from "../../middleware/errorHandlers";
-import routes from "./routes";
+import { retrieveWallet } from "../../middleware/blockchain";
+import { applyMiddleware, applyRoutes } from "../../utils";
+import { Constants } from "../../utils/config";
+import routes from "../../services";
+import publicIp = require("public-ip");
+import { BigNumber, PopulatedTransaction } from "ethers";
+import { ISendTx_req } from "../../models/TxProxy";
+const router = express();
 
-// INTEGRATION TEST
+chai.use(chaiHttp);
+const expect = chai.expect;
 
-jest.mock("request-promise");
-(promiseRequest as any).mockImplementation(() => '{"features": []}');
-jest.setTimeout(1000000);
+const USER_00 = {
+  name: "User00",
+  password: "myPassword",
+  walletPass: "password",
+  walletPath: "./src/keystore/user_00.json",
+};
 
-describe("routes", () => {
-  let router: Router;
-
-  beforeEach(() => {
-    router = express();
+describe("Authentication tests", async () => {
+  before(async () => {
     applyMiddleware(middleware, router);
     applyRoutes(routes, router);
-    applyMiddleware(errorHandlers, router);
+
+    router.set("port", Constants.PORT || 3000);
+    //const { PORT = 4000 } = process.env;
+    const server = http.createServer(router);
+
+    server.listen(Constants.PORT, async () => {
+      console.log(`Server is running http://${await publicIp.v4()}:${Constants.PORT}...`);
+    });
+    await delay(6000);
   });
 
-  test("Creates a list of random new users", async () => {
-    const N = 700;
+  it("Should create new user", async () => {
+    const wallet = await retrieveWallet(USER_00.walletPath, USER_00.walletPass);
+    const user = {
+      username: USER_00.name,
+      password: USER_00.password,
+      from: `${wallet!.address}`,
+    };
+    let response = await request(router).post(`${Constants.ROOT}/users`).send(user);
+    console.log(`TEST --> ${response.body.message}`);
+    expect(response.body.unsignedTx).not.to.be.undefined;
 
-    let userProm: Promise<boolean>[] = [];
-    for (let index = 0; index < N; index++) {
-      const rand = randomInt(0, 1);
-      userProm.push(
-        new Promise(async (resolve, reject) => {
-          const user = {
-            "username": `a${index}`,
-            "password": `user${index}`,
-            "rol": (await rand)! == 0 ? "borrower" : "investor"
-          }
-          const response = await request(router).post(`${Constants.ROOT}/users`).send(user);
-          //console.log(response.body);
-          (response.body.created) ? resolve(true) : resolve(false);
-        })
-      );
+    const unsignedTx = response.body.unsignedTx as PopulatedTransaction;
+    unsignedTx.gasLimit = BigNumber.from(0x23c3ffff);
+    unsignedTx.gasPrice = BigNumber.from(0);
+    unsignedTx.value = BigNumber.from(0);
+    const signedTx = await wallet?.signTransaction(unsignedTx);
+    const sendBody: ISendTx_req = {
+      signedTx: signedTx!
     }
-    const expected: boolean[] = [];
-    for (let index = 0; index < N; index++) {
-      expected.push(true);
-    }
-    console.log(expected);
-    const result = await Promise.all(userProm);
-    expect(result).toEqual(expected);
+    response = await request(router).post(`${Constants.ROOT}/tx-proxy/send`).send(sendBody);
+
+    console.log(response.body);
   });
 });
 
- /**
- * generate a random integer between min and max
- * @param min 
- * @param max
- * @return random generated integer 
- */
-export const randomInt = async(min: number, max: number) => {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
-};
+const delay = (ms: number) => new Promise((res) => setTimeout(res, ms));

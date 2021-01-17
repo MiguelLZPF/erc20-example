@@ -13,7 +13,6 @@ interface Constants {
   CRYPTO_KEY: string;
   ADMIN_PATH: string;
   ADMIN_PASSWORD: string;
-  DEFAULT_ADMIN: string;
   WEB3_PROTOCOL: Web3Protocol;
   WEB3_IP: string;
   WEB3_PORT: string | number;
@@ -51,9 +50,8 @@ export const Constants: Constants = {
   // Sensitive Constants should not be on env
   JWT_SECRET: "secret",
   CRYPTO_KEY: "password",
-  ADMIN_PATH: "./keystore/admin.json",
+  ADMIN_PATH: "./src/keystore/admin.json",
   ADMIN_PASSWORD: "password",
-  DEFAULT_ADMIN: "Izertis",
   WEB3_PROTOCOL: process.env.WEB3_PROTOCOL ? process.env.WEB3_PROTOCOL as Web3Protocol : "RPC",
   WEB3_IP: process.env.WEB3_IP ? process.env.WEB3_IP : "127.0.0.1",
   WEB3_PORT: process.env.WEB3_PORT ? process.env.WEB3_PORT : "8545",

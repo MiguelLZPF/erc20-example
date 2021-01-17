@@ -1,4 +1,4 @@
-import { PopulatedTransaction, UnsignedTransaction } from "ethers";
+import { Bytes, PopulatedTransaction } from "ethers";
 import { Ireq, Ires } from "./IReqRes";
 
 // Deposit
@@ -12,4 +12,20 @@ export interface IDeposit_res extends Ires {
   fromAccount?: string; // manager SC
   bankBalance?: number; // simulated
   tokenBalance?: number;
+}
+
+// Transfer
+export interface ITransfer_req extends Ireq {
+  amount: number;
+  recipientId?: string | Bytes;
+  recipientAccount?: string;
+}
+
+export interface ITransfer_res extends Ires {
+  A_approveUnsignedTx?: PopulatedTransaction;
+  B_transferUnsignedTx?: PopulatedTransaction;
+  toAccount?: string; // recipient
+  fromAccount?: string; // sender
+  spenderBalance?: number;
+  recipientBalance?: number;
 }

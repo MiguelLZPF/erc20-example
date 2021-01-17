@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import * as jwt from "jsonwebtoken";
 import { Constants } from "../../utils/config";
-import { retrieveWallet, iobManager } from "../../middleware/blockchain";
+import { retrieveWallet, iobManager, GAS_OPT, provider } from "../../middleware/blockchain";
 import {
   IToken,
   ITokenData,
@@ -13,8 +13,9 @@ import {
 } from "../../models/Auth";
 import ExtUser, { IExtUser } from "../../models/ExtUser";
 import { hash, encryptHash, decrypt, encrypt } from "../../middleware/auth";
-import { Bytes } from "ethers/lib/utils";
-import { logger, logStart, logClose } from "../../middleware/logger";
+import { Bytes, Logger } from "ethers/lib/utils";
+import { logger, logStart, logClose, logObject } from "../../middleware/logger";
+import { BigNumber } from "ethers";
 
 export const signUp = async (req: Request, res: Response) => {
   const logInfo = logStart("authentication/controller.ts", "signUp");
@@ -32,10 +33,13 @@ export const signUp = async (req: Request, res: Response) => {
     const admin = retrieveWallet(Constants.ADMIN_PATH, Constants.ADMIN_PASSWORD);
     // -- end
 
-    const userBCowner = body.from
-      ? iobManager!.connect(body.from).callStatic.getMyUser()
-      : undefined;
-    const userBCname = iobManager!.connect((await admin)!).callStatic.getUserByName(body.username);
+    // check if the username is already registered
+    // check if from account has a user registered
+    const checkPreviousBC = Promise.all([
+      iobManager!.connect((await admin)!).getUserByName(body.username),
+      body.from ? iobManager!.connect(body.from).callStatic.getMyUser() : undefined,
+    ]);
+
     // user DB object
     const userDB = (await ExtUser.findOne({ username: body.username })) as IExtUser;
     if (userDB) {
@@ -46,35 +50,49 @@ export const signUp = async (req: Request, res: Response) => {
       );
       // return user data
       httpCode = 200;
-      result.generated = true;
       result.message = "WARNING: User '" + body.username + "' alrready created";
       //result.userId = userDB.id;
       // -- END
     } else {
       // if no user, create new
       logger.info(
-        ` ${logInfo.instance} User '${body.username}' not found in database, creating new one`
+        ` ${logInfo.instance} User '${body.username}' not found in database, checking blockchain...`
       );
-      // Check if username already exists and from account does not have any user
-      if ((await userBCowner) && (await userBCowner)?.id) {
-        result.message = result.message.concat(". From account already have a user registered");
-        throw new Error(`From account already have a user registered`);
+
+      try {
+        const userBC = await checkPreviousBC;
+        if (userBC[0].id) {
+          result.message = result.message.concat(". Username already used");
+          throw new Error(`Username already used`);
+        }
+        if (userBC[1] && userBC[1].id) {
+          result.message = result.message.concat(". From account already have a user registered");
+          throw new Error(`From account already have a user registered`);
+        }
+      } catch (error) {
+        if (error.code == -32000) {
+          logger.info(
+            ` ${logInfo.instance} User '${body.username}' not found in blockchain, generating unsigned Tx...`
+          );
+        } else {
+          error.message = result.message.concat(". Error checking user name");
+          throw new Error(`Checking user name: ${error}`);
+        }
       }
-      if ((await userBCname) && (await userBCname)?.id) {
-        result.message = result.message.concat(". Username already used");
-        throw new Error(`Username already used`);
-      }
+
       // No user in DB, create a new one tx
       // -- generate new user unsigned transaction
       const iobManagerFrom = body.from ? iobManager!.connect(body.from) : iobManager!;
       const newUserUnsTx = await iobManagerFrom.populateTransaction.newUser(
         body.username,
-        await encHashPass
+        await encHashPass,
+        GAS_OPT
       );
       if (!newUserUnsTx) {
         result.message = "ERROR: bad unsigned TX creation";
         throw new Error(`Unsigned TX is undefined. Bad unsigned TX creation`);
       }
+      logger.info(` ${logInfo.instance} New User unsigned transaction created successfully`);
       httpCode = 200;
       result.message =
         "User sign up Tx generated successfully." +

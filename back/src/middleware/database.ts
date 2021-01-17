@@ -4,8 +4,8 @@ import { logStart, logger, logClose } from "./logger";
 
 const mongoose = require('mongoose');
 const options = {
-  user: "iob",
-  pass: "iob",
+  user: "myUser",
+  pass: "Contrasenna_1234",
   useNewUrlParser: true,
   retryWrites: true,
   w: "majority",
@@ -35,7 +35,7 @@ const pool = mysql.createPool({
 let mongo: Mongoose;
 
 export const mongoConnect = async(): Promise<Mongoose> => {
-  const logInfo = await logStart("database.ts", "mongoConnect", "trace");
+  const logInfo = logStart("database.ts", "mongoConnect", "trace");
   try {
     mongo = await mongoose.connect(Constants.MONGO_URI, options);
     logger.info(` ${logInfo.instance} Mongo Database connected: ${Constants.MONGO_URI}`);

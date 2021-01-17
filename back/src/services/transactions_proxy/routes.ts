@@ -10,6 +10,6 @@ export default [
   {
     path: `${ROOT}/send`,
     method: "post",
-    handler: [auth, check_sendTx, sendTx],
+    handler: [check_sendTx, sendTx],
   }
 ];

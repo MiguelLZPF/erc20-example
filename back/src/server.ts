@@ -7,7 +7,7 @@ import middleware from "./middleware";
 import routes from "./services";
 import { logger } from "./middleware/logger";
 import * as publicIp from "public-ip";
-import { Constants, Variables } from "./utils/config";
+import { Constants } from "./utils/config";
 /* Error handling Block */
 process.on("uncaughtException", (e) => {
   console.log(e);
@@ -52,3 +52,5 @@ const server = http.createServer(router);
 server.listen(Constants.PORT, async() => {
   logger.info(`Server is running http://${await publicIp.v4()}:${Constants.PORT}...`);
 });
+
+export default [server];

@@ -1,5 +1,5 @@
 import { Constants } from "../../utils/config";
-import { deposit } from "./controller";
+import { depositTx, transferTx } from "./controller";
 import { auth } from "../../middleware/auth";
 
 const ROOT = `${Constants.ROOT}/exchange`;
@@ -13,6 +13,6 @@ export default [
   {
     path: `${ROOT}/transfer`,
     method: "put",
-    handler: [auth, transfer],
+    handler: [auth, transferTx],
   }
 ];
