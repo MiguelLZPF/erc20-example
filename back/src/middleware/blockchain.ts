@@ -21,7 +21,7 @@ import * as AContractRegistry from "./../artifacts/contracts/ContractRegistry.so
 import * as AIobManager from "./../artifacts/contracts/IobManager.sol/IobManager.json";
 import * as AUsers from "./../artifacts/contracts/Users.sol/Users.json";
 import * as AMyToken from "./../artifacts/contracts/MyToken.sol/MyToken.json";
-import { hexlify, isAddress } from "ethers/lib/utils";
+import { isAddress } from "ethers/lib/utils";
 import { logger, logStart, logClose, logObject } from "./logger";
 import * as fs from "async-file";
 import { deployWithRegistry, setTypes } from "./registry";
@@ -49,7 +49,7 @@ export let iobManager: IobManager | undefined;
 export let myToken: MyToken | undefined;
 export let users: Users | undefined;
 
-const configProviders = async () => {
+export const configProviders = async () => {
   const logInfo = logStart("blockchain.ts", "configProviders", "trace");
 
   try {
@@ -63,7 +63,7 @@ const configProviders = async () => {
     if (!provider || !provider._isProvider) {
       throw new Error(` ${logInfo.instance} Provider not connected`);
     }
-    console.log(provider._events)
+    //console.log(provider._events)
   } catch (e) {
     logger.error(` ${logInfo.instance} Configuring Provider. ${e.stack}`);
   } finally {
@@ -87,12 +87,11 @@ const connectProviders = async (protocol: string, uri: string) => {
       logger.warn(`RECONNECTING PROVIDERS...`);
     }); */
     provider.on("error", function(tx) {
-      console.log(`Blockchain error: ${tx}`)
+      logger.error(` ${logInfo.instance} Blockchain error: ${tx}`);
     })
     provider.on("block", (BlockNumber) => {
-      console.log(`New Block mined: ${BlockNumber}`);
+      logger.debug(` ${logInfo.instance} New Block mined: ${BlockNumber}`);
     })
-    
     showProviders();
   } catch (error) {
     logger.error(` ${logInfo.instance} Connecting Providers. ${error.stack}`);
@@ -126,6 +125,7 @@ const fundWallets = async () => {
   for (let i = 0; i < 3; i++) {
     const signer = provider.getSigner(i);
     await signer.unlock("");
+    //console.log(await signer.getBalance(), await signer.getAddress());
     if (i == 0) {
       const admin = (await retrieveWallet(Constants.ADMIN_PATH, Constants.ADMIN_PASSWORD))!;
       if (((await toNumber(await admin.getBalance())) as number) < 10) {
@@ -723,5 +723,5 @@ export const toHexVersion = async (decVersion: string) => {
   }
 };
 
-// Init Providers
-configProviders();
+/* // Init Providers
+configProviders(); */

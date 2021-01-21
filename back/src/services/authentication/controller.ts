@@ -70,7 +70,8 @@ export const signUp = async (req: Request, res: Response) => {
           throw new Error(`From account already have a user registered`);
         }
       } catch (error) {
-        if (error.code == -32000) {
+        //console.log(error.error.code);
+        if (error.error.code == -32000) {
           logger.info(
             ` ${logInfo.instance} User '${body.username}' not found in blockchain, generating unsigned Tx...`
           );

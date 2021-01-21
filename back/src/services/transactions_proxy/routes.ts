@@ -1,4 +1,3 @@
-import { auth } from "../../middleware/auth";
 import { Constants } from "../../utils/config";
 import { check_sendTx } from "./checks";
 import { sendTx } from "./controller";

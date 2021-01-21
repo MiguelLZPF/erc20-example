@@ -18,15 +18,15 @@ services:
     networks:
       - iob-net
 
-  paap-back:
+  iob-back:
     build:
       context: .
       dockerfile: Dockerfile
     #image: node:12
     container_name: iob-back
-    restart: unless-stopped
+    #restart: unless-stopped
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=development
       #- MONGO_DB_URI=mongodb://Mongo-DB:27017/paap
       #- JWT_SECRET=my_secret
     volumes:
@@ -42,17 +42,20 @@ services:
     #command: npm run start:dev
     depends_on:
       - database
+      - ganache
     networks:
       - iob-net
 
   ganache:
     image: trufflesuite/ganache-cli:latest
-    container_name: "Ganache-CLI"
+    container_name: "ganache-cli"
     ports:
       - "8545:8545"
     volumes:
       - ~/docker-volumes/ganache:/ganache_data
-    command: "--db /ganache_data --accounts 2 --secure --port 8545 --gasPrice 0 --gasLimit 9999999999999999"
+    command: "--accounts 12 --secure --port 8545 --gasPrice 0 --gasLimit 9999999999999999"
+    networks:
+      - iob-net
 
 networks:
   iob-net:

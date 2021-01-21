@@ -1,0 +1,33 @@
+version: "3.5"
+
+services:
+  database:
+    image: mongo:latest
+    container_name: iob-mongo
+    environment:
+      - MONGO_INITDB_DATABASE=iobtest
+      - MONGO_INITDB_ROOT_USERNAME=root
+      - MONGO_INITDB_ROOT_PASSWORD=root
+    volumes:
+      - ./init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
+      #- ~/docker-volumes/mongodb:/data/db
+    #command: [--auth]
+    ports:
+      #- "27017-27019:27017-27019"
+      - "27017:27017"
+    networks:
+      - iob-net
+
+  ganache:
+    image: trufflesuite/ganache-cli:latest
+    container_name: "ganache-cli"
+    ports:
+      - "8545:8545"
+    #volumes:
+      #- ~/docker-volumes/ganache:/ganache_data
+    command: "--accounts 12 --secure --port 8545 --gasPrice 0 --gasLimit 9999999999999999"
+    networks:
+      - iob-net
+
+networks:
+  iob-net:
