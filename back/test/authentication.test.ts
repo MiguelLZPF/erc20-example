@@ -4,11 +4,11 @@ import * as chai from "chai";
 import "mocha";
 import { BigNumber, Wallet } from "ethers";
 import { Constants } from "../src/utils/config";
-import { iobManager, retrieveWallet } from "../src/middleware/blockchain";
+import { retrieveWallet } from "../src/middleware/blockchain";
 import { ISendTx_req, ISendTx_res } from "../src/models/TxProxy";
 import ExtUser from "../src/models/ExtUser";
 import { ILogin_req, ILogin_res, ISignUp_res, IToken } from "../src/models/Auth";
-import { IGetMyUser_req, IGetMyUser_res, IGetMyUser_res } from "../src/models/User";
+import { IGetMyUser_res } from "../src/models/User";
 
 //chai.use(chaiHttp);
 const expect = chai.expect;
