@@ -26,17 +26,17 @@ services:
     container_name: iob-back
     #restart: unless-stopped
     environment:
-      - NODE_ENV=development
+      - NODE_ENV=production
       #- MONGO_DB_URI=mongodb://Mongo-DB:27017/paap
       #- JWT_SECRET=my_secret
     volumes:
       #- .:/usr/src/app
       #- ./node_modules:/usr/src/app/node_modules
       # ENVIRONMENT
-      - ./.env:/usr/src/app/.env
-      - ./.env.development:/usr/src/app/.env.development
-      - ./.env.production:/usr/src/app/.env.production
-      - ./src/contracts/artifacts:/usr/src/app/src/contracts/artifacts
+      #- ./.env:/usr/src/app/.env
+      - ./.env.development:/home/server/.env.development
+      - ./.env.production:/home/server/.env.production
+      #- ./src/contracts/artifacts:/home/server/src/contracts/artifacts
     ports:
       - 3000:3000
     #command: npm run start:dev

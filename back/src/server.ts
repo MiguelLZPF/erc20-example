@@ -54,6 +54,7 @@ server.listen(Constants.PORT, async() => {
   logger.info(`Server is running http://${await publicIp.v4()}:${Constants.PORT}...`);
 });
 
+//console.log(Constants);
 configProviders();
 
 export default [server];

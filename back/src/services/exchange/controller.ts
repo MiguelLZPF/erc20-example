@@ -4,13 +4,14 @@ import {
   GAS_OPT,
   iobManager,
   myToken,
+  provider,
   retrieveWallet,
   toBigNum,
   toNumber,
 } from "../../middleware/blockchain";
 import { logClose, logger, logStart } from "../../middleware/logger";
 import { IDeposit_req, IDeposit_res, ITransfer_req, ITransfer_res } from "../../models/Exchange";
-import ExtUser, { IExtUser } from "../../models/ExtUser";
+import ExtUser from "../../models/ExtUser";
 import { Constants } from "../../utils/config";
 
 /**
@@ -22,7 +23,7 @@ import { Constants } from "../../utils/config";
  *        the same amount from the balance of the bank account. Should have enough balance in the
  *        external bank account to make the transfer.
  */
-export const depositTx = async (req: Request, res: Response) => {
+export const deposit = async (req: Request, res: Response) => {
   const logInfo = logStart("exchange/constroller.ts", "deposit");
   const body: IDeposit_req = req.body;
   let httpCode = 202;
@@ -34,8 +35,9 @@ export const depositTx = async (req: Request, res: Response) => {
     // Get admin Wallet
     const admin = retrieveWallet(Constants.ADMIN_PATH, Constants.ADMIN_PASSWORD);
     // Get user external to get balance (bank balance)
-    const userDB = ExtUser.findOne({ owner: body.senderAccount }) as Promise<IExtUser>;
-    const tokenBalance = myToken!.callStatic.balanceOf(body.senderAccount);
+    const userDB = ExtUser.findOne({ owner: body.senderAccount });
+    const tBalanceBefore = myToken!.callStatic.balanceOf(body.senderAccount);
+    const amountBN = toBigNum(body.amount);
 
     const iobManagerAdmin = iobManager!.connect((await admin)!);
     const userBC = await iobManagerAdmin.callStatic.getUserByOwner(body.senderAccount);
@@ -48,32 +50,51 @@ export const depositTx = async (req: Request, res: Response) => {
       throw new Error(`User not found in database for this owner account`);
     }
     // user found and OK
-    if (!((await userDB).balance > body.amount)) {
+    logger.info(` ${logInfo.instance} user ${userBC.id} found, making deposi of ${body.amount}...`);
+    if (!((await userDB)!.balance > body.amount)) {
       result.message = result.message.concat(". Amount to deposit is lower than bank's balance");
       throw new Error(`Amount to deposit is lower than bank's balance`);
     }
 
-    const depositUnsTx = await iobManagerAdmin.populateTransaction.deposit(
-      userBC.id,
-      await toBigNum(body.amount),
-      GAS_OPT
-    );
-    // check
-    if (!depositUnsTx || depositUnsTx.data) {
-      result.message = result.message.concat(". Error creating unsigned transaction");
-      throw new Error(`Creating deposit unsigned transaction`);
+    const receipt = await (
+      await iobManagerAdmin.deposit(userBC.id, await amountBN, GAS_OPT)
+    ).wait();
+    // check tokens
+    if (!receipt || !receipt.transactionHash) {
+      result.message = result.message.concat(". Error making deposit in SC");
+      throw new Error(`Error making deposit in SC`);
     }
-    //OK
-    logger.info(` ${logInfo.instance} Deposit unsigned transaction created successfully`);
+    const tBalanceAfter = (await toNumber(
+      await myToken!.callStatic.balanceOf(body.senderAccount)
+    )) as number;
+    if (tBalanceAfter != ((await toNumber(await tBalanceBefore)) as number) + body.amount) {
+      result.message = result.message.concat(". Amounts before and after does not match");
+      throw new Error(`Amounts before and after does not match`);
+    }
+    // tokens OK, update balance in DB
+    logger.info(` ${logInfo.instance} deposit done, updating data base balance...`);
 
-    result.depositUnsignedTx = depositUnsTx;
+    await (await userDB)!.update({
+      balance: (await userDB)!.balance - body.amount,
+    });
+    const userUpdated = await ExtUser.findOne({ id: userBC.id });
+
+    if (!userUpdated || !userUpdated.id) {
+      result.message = result.message.concat(". Cannot get updated user from database");
+      throw new Error(`Cannot get updated user from database`);
+    }
+    logger.info(` ${logInfo.instance} User ${userBC.id} has made a deposit of ${body.amount}.
+    Updated balances:
+      Bank: ${userUpdated.balance}
+      Token: ${tBalanceAfter}`);
+    //OK
+    logger.info(` ${logInfo.instance} Deposit successfull`);
+
     result.toAccount = userBC.owner;
     result.fromAccount = iobManager?.address;
-    result.bankBalance = (await userDB).balance;
-    result.tokenBalance = (await toNumber(await tokenBalance)) as number;
-    result.message = `Deposit unsigned transaction created successfully.
-    WARNING: balances are current values before the transaction is executed.
-    WARNING: you need to send the signed Transaction using POST /tx-proxy/send route.`;
+    result.bankBalance = userUpdated.balance;
+    result.tokenBalance = tBalanceAfter;
+    result.message = "Deposit made successfully";
     httpCode = 200;
   } catch (error) {
     logger.error(
@@ -86,7 +107,7 @@ export const depositTx = async (req: Request, res: Response) => {
 };
 
 export const transferTx = async (req: Request, res: Response) => {
-  const logInfo = logStart("exchange/constroller.ts", "deposit");
+  const logInfo = logStart("exchange/constroller.ts", "transferTx");
   const body: ITransfer_req = req.body;
   let httpCode = 202;
   let result: ITransfer_res = {
@@ -118,13 +139,14 @@ export const transferTx = async (req: Request, res: Response) => {
       throw new Error(`No reference to the recipient in the request`);
     }
 
-    const spenderBalance = myToken!.callStatic.balanceOf(body.senderAccount);
-    const recipientBalance = myToken!.callStatic.balanceOf(
+    let spenderBalance = myToken!.callStatic.balanceOf(body.senderAccount);
+    let recipientBalance = myToken!.callStatic.balanceOf(
       body.recipientAccount ? body.recipientAccount : (await recipientBC).owner
     );
     const allowance = myToken!.callStatic.allowance(
       body.senderAccount,
-      body.recipientAccount ? body.recipientAccount : (await recipientBC).owner
+      //body.recipientAccount ? body.recipientAccount : (await recipientBC).owner
+      iobManager!.address
     );
 
     if (!spenderBC || !(await spenderBC).id) {
@@ -144,21 +166,37 @@ export const transferTx = async (req: Request, res: Response) => {
       throw new Error(`Amount to transfer is higher than recipient token's balance`);
     }
     // OK
-    if (((await toNumber(await allowance)) as number) > body.amount ) {
-      // allawance already setted, only transfer Tx needed
-      const transferUnsTx = await iobManagerAdmin.populateTransaction.transfer(
-        (await spenderBC).id,
-        (await recipientBC).id,
-        await toBigNum(body.amount),
-        GAS_OPT
+    // Can make tx directly if allowance is set or send txs later
+    if (((await toNumber(await allowance)) as number) > body.amount) {
+      // allawance already setted, only transfer needed
+      const receipt = await (
+        await iobManagerAdmin.transfer(
+          (await spenderBC).id,
+          (await recipientBC).id,
+          await toBigNum(body.amount),
+          GAS_OPT
+        )
+      ).wait();
+      if (!receipt || !receipt.transactionHash) {
+        result.message = result.message.concat(". Transfer cannot be made");
+        throw new Error(`Transfer cannot be made`);
+      }
+      spenderBalance = myToken!.callStatic.balanceOf(body.senderAccount);
+      recipientBalance = myToken!.callStatic.balanceOf(
+        body.recipientAccount ? body.recipientAccount : (await recipientBC).owner
       );
-      result.A_approveUnsignedTx = undefined;
-      result.B_transferUnsignedTx = transferUnsTx;
+      result.txHash = receipt.transactionHash;
+      logger.info(
+        ` ${logInfo.instance} Transfer from ${(await spenderBC).id} to ${
+          (await recipientBC).id
+        } successfully made successfully`
+      );
+      result.message = `Transfer successfully made successfully`;
     } else {
       // allawance not setted yet need two Tx
       const approveUnsTx = await myToken?.populateTransaction.approve(
-        (await recipientBC).owner,
-        await toBigNum(body.amount),
+        iobManager!.address,
+        (await toBigNum(body.amount)).sub(await allowance),
         GAS_OPT
       );
       const transferUnsTx = await iobManagerAdmin.populateTransaction.transfer(
@@ -167,20 +205,29 @@ export const transferTx = async (req: Request, res: Response) => {
         await toBigNum(body.amount),
         GAS_OPT
       );
+      if (!approveUnsTx || !approveUnsTx.data) {
+        result.message = result.message.concat(". Cannot create Approve Unsigned Transaction");
+        throw new Error(`Cannot create Approve Unsigned Transaction`);
+      }
+      if (!transferUnsTx || !transferUnsTx.data) {
+        result.message = result.message.concat(". Cannot create Transfer Unsigned Transaction");
+        throw new Error(`Cannot create Transfer Unsigned Transaction`);
+      }
+      approveUnsTx.nonce = await provider.getTransactionCount(body.senderAccount);
+      transferUnsTx.nonce = await admin!.getTransactionCount();
       result.A_approveUnsignedTx = approveUnsTx;
-      result.B_transferUnsignedTx = transferUnsTx;
+      result.B_transferSignedTx = await admin!.signTransaction(transferUnsTx);
+      logger.info(` ${logInfo.instance} Transfer signed transaction created successfully`);
+      result.message = `Transfer signed transaction created successfully.
+    WARNING: balances are current values before the transaction is executed.
+    WARNING: you need to send the signed Transactions using POST /tx-proxy/send route.
+    first A and then B`;
     }
     //OK
-    logger.info(` ${logInfo.instance} Transfer unsigned transaction created successfully`);
-
     result.toAccount = (await recipientBC).id;
     result.fromAccount = (await spenderBC).id;
     result.spenderBalance = (await toNumber(await spenderBalance)) as number;
     result.recipientBalance = (await toNumber(await recipientBalance)) as number;
-    result.message = `Transfer unsigned transaction created successfully.
-    WARNING: balances are current values before the transaction is executed.
-    WARNING: you need to send the signed Transaction/Transactions using POST /tx-proxy/send route.
-    first A and then B`;
     httpCode = 200;
   } catch (error) {
     logger.error(
@@ -193,22 +240,22 @@ export const transferTx = async (req: Request, res: Response) => {
 };
 
 // NON HTTP Methods
-export const deposit = async (recipient: string, amount: BigNumber) => {
+/* export const deposit = async (recipient: string, amount: BigNumber) => {
   const logInfo = logStart("exchange/controller.ts", "deposit", "info");
   try {
     // async
     // Get user external to get balance (bank balance)
-    const userDB = ExtUser.findOne({ owner: recipient }) as Promise<IExtUser>;
+    const userDB = ExtUser.findOne({ owner: recipient });
     const tokenBalance = myToken!.callStatic.balanceOf(recipient);
 
-    if (!(await userDB) || !(await userDB).id) {
+    if (!(await userDB) || !(await userDB)!.id) {
       throw new Error(`Cannot get user from database`);
     }
     logger.info(` ${logInfo.instance} User ${
-      (await userDB).id
+      (await userDB)!.id
     } has made a deposit of ${await toNumber(amount)}.
     Updated balances:
-      Bank: ${(await userDB).balance}
+      Bank: ${(await userDB)!.balance}
       Token: ${await toNumber(await tokenBalance)}`);
     return true;
   } catch (error) {
@@ -217,27 +264,27 @@ export const deposit = async (recipient: string, amount: BigNumber) => {
   } finally {
     logClose(logInfo);
   }
-};
+}; */
 
 export const transfer = async (spender: string, recipient: string, amount: BigNumber) => {
   const logInfo = logStart("exchange/controller.ts", "transfer", "info");
   try {
     // async
     // Get user external to get balance (bank balance)
-    const spenderDB = ExtUser.findOne({ owner: recipient }) as Promise<IExtUser>;
-    const recipientDB = ExtUser.findOne({ owner: recipient }) as Promise<IExtUser>;
-    const spenderBalance = myToken!.callStatic.balanceOf(spender);
-    const recipientBalance = myToken!.callStatic.balanceOf(recipient);
+    const spenderDB = ExtUser.findOne({ id: spender });
+    const recipientDB = ExtUser.findOne({ id: recipient });
+    const spenderBalance = myToken!.callStatic.balanceOf((await spenderDB)!.owner);
+    const recipientBalance = myToken!.callStatic.balanceOf((await spenderDB)!.owner);
 
-    if (!(await spenderDB) || !(await spenderDB).id) {
+    if (!(await spenderDB) || !(await spenderDB)!.id) {
       throw new Error(`Cannot get spender from database`);
     }
-    if (!(await recipientDB) || !(await recipientDB).id) {
+    if (!(await recipientDB) || !(await recipientDB)!.id) {
       throw new Error(`Cannot get recipient from database`);
     }
     logger.info(` ${logInfo.instance} User ${
-      (await spenderDB).id
-    } has made a transfer of ${await toNumber(amount)} to user ${(await recipientDB).id}.
+      (await spenderDB)!.id
+    } has made a transfer of ${await toNumber(amount)} to user ${(await recipientDB)!.id}.
     Updated token balances:
       Spender: ${await toNumber(await spenderBalance)}
       Recipient: ${await toNumber(await recipientBalance)}`);

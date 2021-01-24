@@ -26,7 +26,7 @@ export const getMyUser = async (req: Request, res: Response) => {
       password: (await userBC).password,
       dateCreated: (await toDate((await userBC).dateCreated)) as Date,
       dateModified: (await toDate((await userBC).dateModified)) as Date,
-      balance: (await userDB).balance,
+      balance: (await userDB)!.balance,
       tokenBalance: (await toNumber(await tokenBalance)) as number,
     }
     

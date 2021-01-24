@@ -24,17 +24,18 @@ let path;
 switch (process.env.NODE_ENV) {
   case "trace":
     process.env.LOG_LEVEL = "trace";
-    path = `${__dirname}/../../.env.development`;
+    path = `${__dirname}/../../../.env.development`;
     break;
   case "development":
-    path = `${__dirname}/../../.env.development`;
+    path = `${__dirname}/../../../.env.development`;
     break;
   case "production":
-    path = `${__dirname}/../../.env.production`;
+    path = `${__dirname}/../../../.env.production`;
     break;
   default:
-    path = `${__dirname}/../../.env.development`;
+    path = `${__dirname}/../../../.env.development`;
 }
+console.log(path);
 dotenv.config({ path: path });
 
 export const Constants: Constants = {

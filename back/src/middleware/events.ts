@@ -1,6 +1,6 @@
 import { BigNumber, Bytes } from "ethers";
 import { registerUser } from "../services/authentication/controller";
-import { deposit, transfer } from "../services/exchange/controller";
+import { transfer } from "../services/exchange/controller";
 import { ContractRegistry, IobManager, MyToken, ProxyAdmin, Users } from "../typechain";
 import { logClose, logger, logStart } from "./logger";
 
@@ -16,7 +16,7 @@ export const subscribeEvents = async (
 
     Promise.all([
       subsUserCreated(iobManager),
-      subsDeposit(iobManager),
+      //subsDeposit(iobManager),
       subsTransfer(iobManager)
     ])
 
@@ -36,12 +36,12 @@ const subsUserCreated = async (iobManager: IobManager) => {
   });
 };
 
-const subsDeposit = async (iobManager: IobManager) => {
+/* const subsDeposit = async (iobManager: IobManager) => {
   const filter = iobManager.filters.Deposit(null, null);
   iobManager.on(filter, async (recipient: string, amount: BigNumber) => {
     await deposit(recipient, amount);
   });
-};
+}; */
 
 const subsTransfer = async (iobManager: IobManager) => {
   const filter = iobManager.filters.Transfer(null, null, null);

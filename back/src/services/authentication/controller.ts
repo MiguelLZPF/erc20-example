@@ -16,6 +16,7 @@ import { hash, encryptHash, decrypt, encrypt } from "../../middleware/auth";
 import { Bytes, Logger } from "ethers/lib/utils";
 import { logger, logStart, logClose, logObject } from "../../middleware/logger";
 import { BigNumber } from "ethers";
+import { Query } from "mongoose";
 
 export const signUp = async (req: Request, res: Response) => {
   const logInfo = logStart("authentication/controller.ts", "signUp");
@@ -71,7 +72,7 @@ export const signUp = async (req: Request, res: Response) => {
         }
       } catch (error) {
         //console.log(error.error.code);
-        if (error.error.code == -32000) {
+        if (error.code == -32000) {
           logger.info(
             ` ${logInfo.instance} User '${body.username}' not found in blockchain, generating unsigned Tx...`
           );
@@ -234,11 +235,11 @@ export const registerUser = async (id: string | Bytes, name: string, password: s
         });
         await extUser.save();
         // check all right
-        userDB = (await ExtUser.findOne({ id: extUser.id })) as IExtUser;
-        if (!userDB || !userDB.id || userDB.id != (await userBC).id) {
+        const userDBcheck = await ExtUser.findOne({ id: extUser.id });
+        if (!userDBcheck || !userDBcheck.id || userDBcheck.id != (await userBC).id) {
           throw new Error(`Cannot check if user is in database`);
         }
-        logger.info(` ${logInfo.instance} User with ID: ${userDB.id} registered in database`);
+        logger.info(` ${logInfo.instance} User with ID: ${userDBcheck.id} registered in database`);
         return true;
       }
     }

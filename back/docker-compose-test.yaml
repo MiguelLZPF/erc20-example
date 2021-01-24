@@ -24,7 +24,7 @@ services:
     ports:
       - "8545:8545"
     #volumes:
-      #- ~/docker-volumes/ganache:/ganache_data
+    #- ~/docker-volumes/ganache:/ganache_data
     command: "--accounts 12 --secure --port 8545 --gasPrice 0 --gasLimit 9999999999999999"
     networks:
       - iob-net
