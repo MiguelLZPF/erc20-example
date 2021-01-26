@@ -1,10 +1,54 @@
 # Back
 
+I will go straight to the tests
+
+## Test
+
+```bash
+# open terminal
+cd iob-exercise/back
+# install node dependencies
+npm install
+```
+
+
+
+### Database and blockchain
+
+```bash
+## up mongo and ganache without permanent storage 
+docker-compose -f docker-compose-test.yaml up -d
+```
+
+### Backend
+
+```bash
+npm run start:trace
+# wait until contracts are deployed etc
+```
+
+### Run Tests
+
+```bash
+# on another terminal
+npm run test
+
+## to run tests again its needed to remove data on the database
+docker-compose -f docker-compose-test.yaml down
+docker-compose -f docker-compose-test.yaml up -d
+```
+
+
+
+
+
+
+
 ## Docker-Compose
 
 `docker-compose up`
 
-## Docker
+## Docker useful commands
 
 ### Database MongoDB
 
@@ -31,15 +75,6 @@ $ docker start ganache-cli
 ```
 
 ## Connection Variables
-
-### Alastria (websockets)
-
-```bash
-WEB3_PROTOCOL = "WS"
-WEB3_IP = ""
-WEB3_PORT = "8546"
-WEB3_ROUTE = ""
-```
 
 ### Ganache (websockets)
 
