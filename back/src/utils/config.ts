@@ -39,11 +39,11 @@ console.log(path);
 dotenv.config({ path: path });
 
 export const Constants: Constants = {
-  APP_NAME: process.env.APP_NAME ? process.env.APP_NAME : "IoBTest",
-  ROOT: process.env.ROOT ? process.env.ROOT : "/iobtest",
+  APP_NAME: process.env.APP_NAME ? process.env.APP_NAME : "erc20-example-back",
+  ROOT: process.env.ROOT ? process.env.ROOT : "/erc20-example-back",
   LOG_LEVEL: process.env.LOG_LEVEL ? (process.env.LOG_LEVEL as LogLevel) : "info",
   PORT: process.env.PORT ? process.env.PORT : 3000,
-  MONGO_URI: process.env.MONGO_URI ? process.env.MONGO_URI : "mongodb://127.0.0.1:27017/iobtest",
+  MONGO_URI: process.env.MONGO_URI ? process.env.MONGO_URI : "mongodb://127.0.0.1:27017/erc20-example",
   // Sensitive Constants should not be on env
   JWT_SECRET: "secret",
   CRYPTO_KEY: "password",

@@ -3,9 +3,9 @@ version: "3.5"
 services:
   database:
     image: mongo:latest
-    container_name: iob-mongo
+    container_name: erc20-example-mongo
     environment:
-      - MONGO_INITDB_DATABASE=iobtest
+      - MONGO_INITDB_DATABASE=erc20-example
       - MONGO_INITDB_ROOT_USERNAME=root
       - MONGO_INITDB_ROOT_PASSWORD=root
     volumes:
@@ -16,14 +16,14 @@ services:
       #- "27017-27019:27017-27019"
       - "27017:27017"
     networks:
-      - iob-net
+      - erc20-example-net
 
-  iob-back:
+  erc20-example-back:
     build:
       context: .
       dockerfile: Dockerfile
     #image: node:12
-    container_name: iob-back
+    container_name: erc20-example-back
     #restart: unless-stopped
     environment:
       - NODE_ENV=production
@@ -44,7 +44,7 @@ services:
       - database
       - ganache
     networks:
-      - iob-net
+      - erc20-example-net
 
   ganache:
     image: trufflesuite/ganache-cli:latest
@@ -55,7 +55,7 @@ services:
       - ~/docker-volumes/ganache:/ganache_data
     command: "--accounts 12 --secure --port 8545 --gasPrice 0 --gasLimit 9999999999999999"
     networks:
-      - iob-net
+      - erc20-example-net
 
 networks:
-  iob-net:
+  erc20-example-net:

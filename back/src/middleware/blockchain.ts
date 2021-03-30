@@ -12,13 +12,13 @@ import {
 import { Constants, Variables } from "./../utils/config";
 import { ProxyAdmin } from "../typechain/ProxyAdmin";
 import { ContractRegistry } from "../typechain/ContractRegistry";
-import { IobManager } from "../typechain/IobManager";
+import { ExampleManager } from "../typechain/ExampleManager";
 import { MyToken } from "../typechain/MyToken";
 import { Users } from "../typechain/Users";
-import * as AProxyAdmin from "./../artifacts/@openzeppelin/contracts/proxy/ProxyAdmin.sol/ProxyAdmin.json";
-import * as ATUP from "./../artifacts/@openzeppelin/contracts/proxy/TransparentUpgradeableProxy.sol/TransparentUpgradeableProxy.json";
+import * as AProxyAdmin from "./../artifacts/@openzeppelin/contracts/proxy/transparent/ProxyAdmin.sol/ProxyAdmin.json";
+import * as ATUP from "./../artifacts/@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol/TransparentUpgradeableProxy.json";
 import * as AContractRegistry from "./../artifacts/contracts/ContractRegistry.sol/ContractRegistry.json";
-import * as AIobManager from "./../artifacts/contracts/IobManager.sol/IobManager.json";
+import * as AExampleManager from "./../artifacts/contracts/ExampleManager.sol/ExampleManager.json";
 import * as AUsers from "./../artifacts/contracts/Users.sol/Users.json";
 import * as AMyToken from "./../artifacts/contracts/MyToken.sol/MyToken.json";
 import { isAddress } from "ethers/lib/utils";
@@ -45,7 +45,7 @@ export const GAS_OPT = { gasPrice: "0x00", gasLimit: "0x23c3ffff" };
 
 export let proxyAdmin: ProxyAdmin | undefined;
 export let contractRegistry: ContractRegistry | undefined;
-export let iobManager: IobManager | undefined;
+export let exampleManager: ExampleManager | undefined;
 export let myToken: MyToken | undefined;
 export let users: Users | undefined;
 
@@ -86,12 +86,12 @@ const connectProviders = async (protocol: string, uri: string) => {
       connectProviders(protocol, uri);
       logger.warn(`RECONNECTING PROVIDERS...`);
     }); */
-    provider.on("error", function(tx) {
+    provider.on("error", function (tx) {
       logger.error(` ${logInfo.instance} Blockchain error: ${tx}`);
-    })
+    });
     provider.on("block", (BlockNumber) => {
       logger.debug(` ${logInfo.instance} New Block mined: ${BlockNumber}`);
-    })
+    });
     showProviders();
   } catch (error) {
     logger.error(` ${logInfo.instance} Connecting Providers. ${error.stack}`);
@@ -114,7 +114,7 @@ const showProviders = async () => {
   Contracts initialized (${initialized}):
           Proxy Admin: ${proxyAdmin?.address}
           Contract Registry: ${contractRegistry?.address}
-          IOB Manager: ${iobManager?.address}
+          IOB Manager: ${exampleManager?.address}
           My Token: ${myToken?.address}
           Users: ${users?.address} \n`);
   logClose(logInfo);
@@ -184,7 +184,11 @@ const initContracts = async () => {
         AContractRegistry.abi,
         provider
       ) as ContractRegistry;
-      iobManager = new Contract(Variables.IOB_MANAGER, AIobManager.abi, provider) as IobManager;
+      exampleManager = new Contract(
+        Variables.IOB_MANAGER,
+        AExampleManager.abi,
+        provider
+      ) as ExampleManager;
       myToken = new Contract(Variables.MY_TOKEN, AMyToken.abi, provider) as MyToken;
       users = new Contract(Variables.USERS, AUsers.abi, provider) as Users;
       deployedNstored = true;
@@ -196,7 +200,7 @@ const initContracts = async () => {
     if (!deployedNstored) {
       throw new Error("Cannot deploy or found the smart contracts");
     }
-    subscribed = subscribeEvents(proxyAdmin!, contractRegistry!, iobManager!, myToken!, users!);
+    subscribed = subscribeEvents(proxyAdmin!, contractRegistry!, exampleManager!, myToken!, users!);
     return deployedNstored;
   } catch (error) {
     logger.error(` ${logInfo.instance} Initializing Contracts. ${error.stack}`);
@@ -304,18 +308,18 @@ const deployContracts = async (admin?: Wallet) => {
       throw new Error(`Proxy's address cannot be the same as logic's address`);
     }
 
-    logger.info(` ${logInfo.instance} Deploying IobManager contract...`);
+    logger.info(` ${logInfo.instance} Deploying ExampleManager contract...`);
 
-    iobManager = (await deployWithRegistry(
+    exampleManager = (await deployWithRegistry(
       contractRegistry,
-      AIobManager,
+      AExampleManager,
       admin,
       "iob-manager",
       true,
       [users.address]
-    )) as IobManager;
-    if (!iobManager || !iobManager.address) {
-      throw new Error(`IobManager contract not deployed`);
+    )) as ExampleManager;
+    if (!exampleManager || !exampleManager.address) {
+      throw new Error(`ExampleManager contract not deployed`);
     }
 
     deployEvent = (await getEvents(
@@ -327,10 +331,10 @@ const deployContracts = async (admin?: Wallet) => {
       await provider.getBlockNumber()
     )) as Event;
     if (!deployEvent || !deployEvent.args) {
-      throw new Error(`IobManager contract deploy event not found`);
+      throw new Error(`ExampleManager contract deploy event not found`);
     }
     if (deployEvent.args?.owner != admin.address) {
-      throw new Error(`IobManager contract's owner is not the admin wallet`);
+      throw new Error(`ExampleManager contract's owner is not the admin wallet`);
     }
     if (deployEvent.args?.proxy == deployEvent.args?.logic) {
       throw new Error(`Proxy's address cannot be the same as logic's address`);
@@ -339,7 +343,7 @@ const deployContracts = async (admin?: Wallet) => {
     logger.info(` ${logInfo.instance} Deploying Token contract...`);
 
     myToken = (await deployWithRegistry(contractRegistry, AMyToken, admin, "iob-token", true, [
-      iobManager.address,
+      exampleManager.address,
     ])) as MyToken;
     if (!myToken || !myToken.address) {
       throw new Error(`MyToken contract not deployed`);

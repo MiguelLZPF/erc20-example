@@ -1,5 +1,5 @@
 import { BigNumber, Wallet, Event } from "ethers";
-import { ethers, hardhatArguments } from "hardhat";
+import { ethers, network } from "hardhat";
 
 import * as fs from "async-file";
 import {
@@ -16,7 +16,7 @@ import { deployWithRegistry, setTypes } from "../scripts/Registry";
 
 import { ProxyAdmin } from "../typechain/ProxyAdmin";
 import { ContractRegistry } from "../typechain/ContractRegistry";
-import { IobManager } from "../typechain/IobManager";
+import { ExampleManager } from "../typechain/ExampleManager";
 import { MyToken } from "../typechain/MyToken";
 import { Users } from "../typechain/Users";
 
@@ -38,17 +38,18 @@ let proxyAdmin: ProxyAdmin;
 let registry: ContractRegistry;
 let registryAdmin: ContractRegistry;
 let users: Users;
-let iobManager: IobManager;
+let exampleManager: ExampleManager;
 let myToken: MyToken;
 
 describe("Deploy of project's contracts", async function () {
   //this.timeout
 
   before(async () => {
+    console.log(`[]-[]-[] Using network: ${network.name}  []-[]-[]`);
     const accounts = await ethers.getSigners();
-    /* accounts.forEach(async (signer) => {
+    /* accounts.forEach(async(signer) => {
       console.log(await signer.getAddress());
-    }); */
+    }) */
 
     if (accounts.length < WALL_NUMBER) {
       console.warn(
@@ -56,7 +57,7 @@ describe("Deploy of project's contracts", async function () {
           so the remaining wallets will have a balance of 0 wei`
       );
     }
-
+    let tempWallets: Wallet[] = [];
     let wallet: Promise<Wallet | undefined>;
 
     try {
@@ -70,29 +71,23 @@ describe("Deploy of project's contracts", async function () {
         wallet = createWallet(`./keystore/wallet_${index}.json`, WALL_PASS, WALL_ENTROPY);
         promWallets.push(wallet);
       }
-      wallets = (await Promise.all(promWallets)) as Wallet[];
-      // If other networks, coment the If structure first time
-      if (hardhatArguments.network == "hardhat") {
-        for (let index = 0; index < WALL_NUMBER; index++) {
-          if (hardhatArguments.network != "hardhat") {
-            await provider.getSigner(index).unlock("");
-          }
-          await accounts[index].sendTransaction({
-            to: wallets[index].address,
-            value: BigNumber.from("0x56BC75E2D63100000"), //100 eth
-          });
-          console.log(`Wallet_${index}:
-          - Address: ${wallets[index].address}
-          - Balance: ${await wallets[index].getBalance()}`);
-        }
+      tempWallets = (await Promise.all(promWallets)) as Wallet[];
+      for (let index = 0; index < WALL_NUMBER; index++) {
+        await accounts[index].sendTransaction({
+          to: tempWallets[index].address,
+          value: BigNumber.from("0x56BC75E2D63100000"), //100 eth
+        });
+        console.log(`Wallet_${index}:
+        - Address: ${tempWallets[index].address}
+        - Balance: ${await tempWallets[index].getBalance()}`);
       }
-      // name general accounts
-      admin = wallets[0];
-      user00 = wallets[1];
-      user01 = wallets[2];
     } catch (error) {
       console.error(error);
     }
+    // name general accounts
+    admin = tempWallets[0];
+    user00 = tempWallets[1];
+    user01 = tempWallets[2];
   });
 
   step("Should deploy Proxy Admin contract", async () => {
@@ -167,7 +162,11 @@ describe("Deploy of project's contracts", async function () {
   step("Should set contract types", async () => {
     console.log("\n ==> Setting contract Types and Versions...\n");
 
-    const receipts = await setTypes(registry, ["iob-manager", "iob-token", "iob-users"]);
+    const receipts = await setTypes(registry, [
+      "example-manager",
+      "example-token",
+      "example-users",
+    ]);
 
     const newTypeEvents = (await getEvents(
       registry,
@@ -195,7 +194,7 @@ describe("Deploy of project's contracts", async function () {
       registry,
       "Users",
       { signer: admin },
-      "iob-users",
+      "example-users",
       true
     )) as Users;
     expect(users).not.to.be.undefined;
@@ -231,7 +230,7 @@ describe("Deploy of project's contracts", async function () {
         - Date Updated: ${new Date(parseInt(usersRecord.dateUpdated._hex) * 1000)}`);
     expect(usersRecord.proxy).not.to.equal(usersRecord.logic);
     expect(usersRecord.owner).to.equal(admin.address);
-    expect(usersRecord.type_).to.equal("iob-users");
+    expect(usersRecord.type_).to.equal("example-users");
     expect(usersRecord.version).to.equal("0x0001");
 
     expect(await users.callStatic.owner()).to.equal(admin.address);
@@ -240,15 +239,15 @@ describe("Deploy of project's contracts", async function () {
   step("Should deploy Manager contract", async () => {
     console.log("\n ==> Deploying Manager contract...\n");
 
-    iobManager = (await deployWithRegistry(
+    exampleManager = (await deployWithRegistry(
       registry,
-      "IobManager",
+      "ExampleManager",
       { signer: admin },
-      "iob-manager",
+      "example-manager",
       true,
       [users.address]
-    )) as IobManager;
-    expect(iobManager).not.to.be.undefined;
+    )) as ExampleManager;
+    expect(exampleManager).not.to.be.undefined;
 
     const deployEvent = (await getEvents(
       registry,
@@ -259,7 +258,7 @@ describe("Deploy of project's contracts", async function () {
       await provider.getBlockNumber()
     )) as Event;
     expect(deployEvent).not.to.be.undefined;
-    console.log(`IobManager contract deployed event: 
+    console.log(`ExampleManager contract deployed event: 
       - Proxy: ${deployEvent.args?.proxy}
       - Logic: ${deployEvent.args?.logic}
       - Owner: ${deployEvent.args?.owner}\n`);
@@ -269,9 +268,9 @@ describe("Deploy of project's contracts", async function () {
       "Proxy's address cannot be the same as logic's address"
     );
 
-    const managerRecord = await registryAdmin.callStatic.getRecord(iobManager.address, GAS_OPT);
+    const managerRecord = await registryAdmin.callStatic.getRecord(exampleManager.address, GAS_OPT);
     expect(managerRecord).not.to.be.undefined;
-    console.log(`IobManager contract Record:
+    console.log(`ExampleManager contract Record:
         - Proxy: ${managerRecord.proxy}
         - Logic: ${managerRecord.logic}
         - Owner: ${managerRecord.owner}
@@ -281,18 +280,23 @@ describe("Deploy of project's contracts", async function () {
         - Date Updated: ${new Date(parseInt(managerRecord.dateUpdated._hex) * 1000)}`);
     expect(managerRecord.proxy).not.to.equal(managerRecord.logic);
     expect(managerRecord.owner).to.equal(admin.address);
-    expect(managerRecord.type_).to.equal("iob-manager");
+    expect(managerRecord.type_).to.equal("example-manager");
     expect(managerRecord.version).to.equal("0x0001");
 
-    expect(await iobManager.callStatic.owner()).to.equal(admin.address);
+    expect(await exampleManager.callStatic.owner()).to.equal(admin.address);
   });
 
   step("Should deploy Token contract", async () => {
     console.log("\n ==> Deploying Token contract...\n");
 
-    myToken = (await deployWithRegistry(registry, "MyToken", { signer: admin }, "iob-token", true, [
-      iobManager.address,
-    ])) as MyToken;
+    myToken = (await deployWithRegistry(
+      registry,
+      "MyToken",
+      { signer: admin },
+      "example-token",
+      true,
+      [exampleManager.address]
+    )) as MyToken;
     expect(myToken).not.to.be.undefined;
 
     const deployEvent = (await getEvents(
@@ -304,7 +308,7 @@ describe("Deploy of project's contracts", async function () {
       await provider.getBlockNumber()
     )) as Event;
     expect(deployEvent).not.to.be.undefined;
-    console.log(`IobManager contract deployed event: 
+    console.log(`ExampleManager contract deployed event: 
       - Proxy: ${deployEvent.args?.proxy}
       - Logic: ${deployEvent.args?.logic}
       - Owner: ${deployEvent.args?.owner}\n`);
@@ -316,7 +320,7 @@ describe("Deploy of project's contracts", async function () {
 
     const tokenRecord = await registryAdmin.callStatic.getRecord(myToken.address, GAS_OPT);
     expect(tokenRecord).not.to.be.undefined;
-    console.log(`IobManager contract Record:
+    console.log(`ExampleManager contract Record:
         - Proxy: ${tokenRecord.proxy}
         - Logic: ${tokenRecord.logic}
         - Owner: ${tokenRecord.owner}
@@ -326,7 +330,7 @@ describe("Deploy of project's contracts", async function () {
         - Date Updated: ${new Date(parseInt(tokenRecord.dateUpdated._hex) * 1000)}`);
     expect(tokenRecord.proxy).not.to.equal(tokenRecord.logic);
     expect(tokenRecord.owner).to.equal(admin.address);
-    expect(tokenRecord.type_).to.equal("iob-token");
+    expect(tokenRecord.type_).to.equal("example-token");
     expect(tokenRecord.version).to.equal("0x0001");
 
     expect(await myToken.callStatic.owner()).to.equal(admin.address);
@@ -345,7 +349,7 @@ describe("Deploy of project's contracts", async function () {
           proxyAdmin: proxyAdmin.address,
           registry: registry.address,
           users: users.address,
-          iobManager: iobManager.address,
+          exampleManager: exampleManager.address,
           myToken: myToken.address,
         },
       })

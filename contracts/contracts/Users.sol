@@ -1,6 +1,5 @@
-// SPDX-License-Identifier: UNLICENSED
-pragma solidity >=0.6.0 <0.8.0;
-pragma experimental ABIEncoderV2;
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
 
 import {
   OwnableUpgradeable as Ownable

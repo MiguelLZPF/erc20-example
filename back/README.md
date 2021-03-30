@@ -6,12 +6,10 @@ I will go straight to the tests
 
 ```bash
 # open terminal
-cd iob-exercise/back
+cd erc20-example/back
 # install node dependencies
 npm install
 ```
-
-
 
 ### Database and blockchain
 
@@ -38,12 +36,6 @@ docker-compose -f docker-compose-test.yaml down
 docker-compose -f docker-compose-test.yaml up -d
 ```
 
-
-
-
-
-
-
 ## Docker-Compose
 
 `docker-compose up`
@@ -67,7 +59,7 @@ $ docker start mongodb
 
 ```bash
 # Run container
-$ docker run -d -p 8545:8545 --name ganache-cli trufflesuite/ganache-cli:latest --accounts 2 --secure --port 8545 --gasPrice 0 --gasLimit 9999999999999999 --hardfork byzantium
+$ docker run -d -p 8545:8545 --name ganache-cli trufflesuite/ganache-cli:latest --accounts 2 --secure --port 8545 --gasPrice 0 --gasLimit 9999999999999999
 # Stop container
 $ docker stop ganache-cli
 # Start container

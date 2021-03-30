@@ -2,7 +2,7 @@ import { BigNumber } from "ethers";
 import { Request, Response } from "express";
 import {
   GAS_OPT,
-  iobManager,
+  exampleManager,
   myToken,
   provider,
   retrieveWallet,
@@ -39,8 +39,8 @@ export const deposit = async (req: Request, res: Response) => {
     const tBalanceBefore = myToken!.callStatic.balanceOf(body.senderAccount);
     const amountBN = toBigNum(body.amount);
 
-    const iobManagerAdmin = iobManager!.connect((await admin)!);
-    const userBC = await iobManagerAdmin.callStatic.getUserByOwner(body.senderAccount);
+    const exampleManagerAdmin = exampleManager!.connect((await admin)!);
+    const userBC = await exampleManagerAdmin.callStatic.getUserByOwner(body.senderAccount);
     if (!userBC || !userBC.id) {
       result.message = result.message.concat(". Cannot find user for this account");
       throw new Error(`User not found in blockchain for this owner account`);
@@ -57,7 +57,7 @@ export const deposit = async (req: Request, res: Response) => {
     }
 
     const receipt = await (
-      await iobManagerAdmin.deposit(userBC.id, await amountBN, GAS_OPT)
+      await exampleManagerAdmin.deposit(userBC.id, await amountBN, GAS_OPT)
     ).wait();
     // check tokens
     if (!receipt || !receipt.transactionHash) {
@@ -91,7 +91,7 @@ export const deposit = async (req: Request, res: Response) => {
     logger.info(` ${logInfo.instance} Deposit successfull`);
 
     result.toAccount = userBC.owner;
-    result.fromAccount = iobManager?.address;
+    result.fromAccount = exampleManager?.address;
     result.bankBalance = userUpdated.balance;
     result.tokenBalance = tBalanceAfter;
     result.message = "Deposit made successfully";
@@ -116,8 +116,8 @@ export const transferTx = async (req: Request, res: Response) => {
   try {
     // Get admin Wallet
     const admin = await retrieveWallet(Constants.ADMIN_PATH, Constants.ADMIN_PASSWORD);
-    const iobManagerAdmin = iobManager!.connect(admin!);
-    const spenderBC = iobManagerAdmin.callStatic.getUserByOwner(body.senderAccount);
+    const exampleManagerAdmin = exampleManager!.connect(admin!);
+    const spenderBC = exampleManagerAdmin.callStatic.getUserByOwner(body.senderAccount);
     let recipientBC:
       | Promise<
           [string, string, string, string, BigNumber, BigNumber] & {
@@ -131,9 +131,9 @@ export const transferTx = async (req: Request, res: Response) => {
         >
       | undefined;
     if (body.recipientAccount) {
-      recipientBC = iobManagerAdmin.callStatic.getUserByOwner(body.recipientAccount);
+      recipientBC = exampleManagerAdmin.callStatic.getUserByOwner(body.recipientAccount);
     } else if (body.recipientId) {
-      recipientBC = iobManagerAdmin.callStatic.getUser(body.recipientId);
+      recipientBC = exampleManagerAdmin.callStatic.getUser(body.recipientId);
     } else {
       result.message = result.message.concat(". Cannot find recipient id or account");
       throw new Error(`No reference to the recipient in the request`);
@@ -146,7 +146,7 @@ export const transferTx = async (req: Request, res: Response) => {
     const allowance = myToken!.callStatic.allowance(
       body.senderAccount,
       //body.recipientAccount ? body.recipientAccount : (await recipientBC).owner
-      iobManager!.address
+      exampleManager!.address
     );
 
     if (!spenderBC || !(await spenderBC).id) {
@@ -170,7 +170,7 @@ export const transferTx = async (req: Request, res: Response) => {
     if (((await toNumber(await allowance)) as number) > body.amount) {
       // allawance already setted, only transfer needed
       const receipt = await (
-        await iobManagerAdmin.transfer(
+        await exampleManagerAdmin.transfer(
           (await spenderBC).id,
           (await recipientBC).id,
           await toBigNum(body.amount),
@@ -195,11 +195,11 @@ export const transferTx = async (req: Request, res: Response) => {
     } else {
       // allawance not setted yet need two Tx
       const approveUnsTx = await myToken?.populateTransaction.approve(
-        iobManager!.address,
+        exampleManager!.address,
         (await toBigNum(body.amount)).sub(await allowance),
         GAS_OPT
       );
-      const transferUnsTx = await iobManagerAdmin.populateTransaction.transfer(
+      const transferUnsTx = await exampleManagerAdmin.populateTransaction.transfer(
         (await spenderBC).id,
         (await recipientBC).id,
         await toBigNum(body.amount),

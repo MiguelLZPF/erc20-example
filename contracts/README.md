@@ -2,15 +2,13 @@
 
 I will go straight to the tests
 
-
-
 ## Tests
 
 How to test SC functionalities:
 
 ```bash
 # open terminal
-cd iob-exercise/contracts
+cd erc20-example/contracts
 # install node dependencies
 npm install
 # execute all test

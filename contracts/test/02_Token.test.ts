@@ -8,7 +8,7 @@ import { step } from "mocha-steps";
 
 import { ProxyAdmin } from "../typechain/ProxyAdmin";
 import { ContractRegistry } from "../typechain/ContractRegistry";
-import { IobManager } from "../typechain/IobManager";
+import { ExampleManager } from "../typechain/ExampleManager";
 import { MyToken } from "../typechain/MyToken";
 import { Users } from "../typechain/Users";
 import { toBigNum } from "../scripts/Utils";
@@ -34,9 +34,9 @@ let user01: Wallet;
 let proxyAdmin: ProxyAdmin;
 let registry: ContractRegistry;
 let users: Users;
-let iobManager: IobManager;
-let iobManagerU00: IobManager;
-let iobManagerU01: IobManager;
+let exampleManager: ExampleManager;
+let exampleManagerU00: ExampleManager;
+let exampleManagerU01: ExampleManager;
 let myToken: MyToken;
 let myTokenU00: MyToken;
 let myTokenU01: MyToken;
@@ -44,7 +44,7 @@ let myTokenU01: MyToken;
 // maps account and user ID
 let userMap = new Map<string, string>();
 
-describe("IobManager token related test", async function () {
+describe("ExampleManager token related test", async function () {
   //this.timeout
 
   before(`Get data from test ${PREV_TEST}`, async () => {
@@ -61,7 +61,7 @@ describe("IobManager token related test", async function () {
       ethers.getContractAt("ProxyAdmin", prevData.contracts.proxyAdmin),
       ethers.getContractAt("ContractRegistry", prevData.contracts.registry),
       ethers.getContractAt("Users", prevData.contracts.users),
-      ethers.getContractAt("IobManager", prevData.contracts.iobManager),
+      ethers.getContractAt("ExampleManager", prevData.contracts.exampleManager),
       ethers.getContractAt("MyToken", prevData.contracts.myToken),
     ]);
     wallets = await wallets;
@@ -72,14 +72,14 @@ describe("IobManager token related test", async function () {
     proxyAdmin = contracts[0].connect(admin);
     registry = contracts[1].connect(admin);
     users = contracts[2].connect(admin);
-    iobManager = contracts[3].connect(admin);
-    iobManagerU00 = iobManager.connect(user00);
-    iobManagerU01 = iobManager.connect(user01);
+    exampleManager = contracts[3].connect(admin);
+    exampleManagerU00 = exampleManager.connect(user00);
+    exampleManagerU01 = exampleManager.connect(user01);
     myToken = contracts[4].connect(admin);
     myTokenU00 = myToken.connect(user00);
     myTokenU01 = myToken.connect(user01);
 
-    const usersDefined = await iobManager.callStatic.getAllUsers();
+    const usersDefined = await exampleManager.callStatic.getAllUsers();
     for (let index = 0; index < usersDefined.length; index++) {
       userMap.set(usersDefined[index].owner, usersDefined[index].id);
     }
@@ -92,9 +92,9 @@ describe("IobManager token related test", async function () {
     expect(proxyAdmin.address).to.not.be.undefined;
     expect(registry.address).to.not.be.undefined;
     expect(users.address).to.not.be.undefined;
-    expect(iobManager.address).to.not.be.undefined;
-    expect(iobManagerU00.address).to.not.be.undefined;
-    expect(iobManagerU01.address).to.not.be.undefined;
+    expect(exampleManager.address).to.not.be.undefined;
+    expect(exampleManagerU00.address).to.not.be.undefined;
+    expect(exampleManagerU01.address).to.not.be.undefined;
     expect(myToken.address).to.not.be.undefined;
     expect(userMap.size).to.equal(2);
 
@@ -102,7 +102,7 @@ describe("IobManager token related test", async function () {
   });
 
   step(`Check initial state is OK`, async () => {
-    const bankBalance = FixedNumber.fromValue(await myToken.balanceOf(iobManager.address), 18);
+    const bankBalance = FixedNumber.fromValue(await myToken.balanceOf(exampleManager.address), 18);
     const balanceU00 = FixedNumber.fromValue(await myToken.balanceOf(user00.address), 18);
     const balanceU01 = FixedNumber.fromValue(await myToken.balanceOf(user01.address), 18);
 
@@ -113,19 +113,19 @@ describe("IobManager token related test", async function () {
 
   step(`Deposit tokens to accounts`, async () => {
     const receipts = [
-      await iobManager.deposit(
+      await exampleManager.deposit(
         userMap.get(user00.address)!,
         await toBigNum(AMOUNTS.deposit),
         GAS_OPT
       ),
-      await iobManager.deposit(
+      await exampleManager.deposit(
         userMap.get(user01.address)!,
         await toBigNum(AMOUNTS.deposit),
         GAS_OPT
       ),
     ];
 
-    const bankBalance = FixedNumber.fromValue(await myToken.balanceOf(iobManager.address), 18);
+    const bankBalance = FixedNumber.fromValue(await myToken.balanceOf(exampleManager.address), 18);
     const balanceU00 = FixedNumber.fromValue(await myToken.balanceOf(user00.address), 18);
     const balanceU01 = FixedNumber.fromValue(await myToken.balanceOf(user01.address), 18);
 
@@ -135,16 +135,16 @@ describe("IobManager token related test", async function () {
   });
 
   step(`Transfer tokens between users accounts`, async () => {
-    await myTokenU00.approve(iobManager.address, await toBigNum(AMOUNTS.transfer), GAS_OPT);
+    await myTokenU00.approve(exampleManager.address, await toBigNum(AMOUNTS.transfer), GAS_OPT);
 
-    await iobManager.transfer(
+    await exampleManager.transfer(
       userMap.get(user00.address)!,
       userMap.get(user01.address)!,
       await toBigNum(AMOUNTS.transfer),
       GAS_OPT
     );
 
-    const bankBalance = FixedNumber.fromValue(await myToken.balanceOf(iobManager.address), 18);
+    const bankBalance = FixedNumber.fromValue(await myToken.balanceOf(exampleManager.address), 18);
     const balanceU00 = FixedNumber.fromValue(await myToken.balanceOf(user00.address), 18);
     const balanceU01 = FixedNumber.fromValue(await myToken.balanceOf(user01.address), 18);
 
@@ -154,21 +154,21 @@ describe("IobManager token related test", async function () {
   });
 
   step(`Withdraw tokens from accounts`, async () => {
-    await myTokenU00.approve(iobManager.address, await toBigNum(AMOUNTS.withdraw), GAS_OPT);
-    await myTokenU01.approve(iobManager.address, await toBigNum(AMOUNTS.withdraw), GAS_OPT);
+    await myTokenU00.approve(exampleManager.address, await toBigNum(AMOUNTS.withdraw), GAS_OPT);
+    await myTokenU01.approve(exampleManager.address, await toBigNum(AMOUNTS.withdraw), GAS_OPT);
 
-    await iobManager.withdraw(
+    await exampleManager.withdraw(
       userMap.get(user00.address)!,
       await toBigNum(AMOUNTS.withdraw),
       GAS_OPT
     );
-    await iobManager.withdraw(
+    await exampleManager.withdraw(
       userMap.get(user01.address)!,
       await toBigNum(AMOUNTS.withdraw),
       GAS_OPT
     );
 
-    const bankBalance = FixedNumber.fromValue(await myToken.balanceOf(iobManager.address), 18);
+    const bankBalance = FixedNumber.fromValue(await myToken.balanceOf(exampleManager.address), 18);
     const balanceU00 = FixedNumber.fromValue(await myToken.balanceOf(user00.address), 18);
     const balanceU01 = FixedNumber.fromValue(await myToken.balanceOf(user01.address), 18);
 
@@ -195,7 +195,7 @@ describe("IobManager token related test", async function () {
           proxyAdmin: proxyAdmin.address,
           registry: registry.address,
           users: users.address,
-          iobManager: iobManager.address,
+          exampleManager: exampleManager.address,
           myToken: myToken.address,
         },
       })

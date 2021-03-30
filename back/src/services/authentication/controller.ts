@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import * as jwt from "jsonwebtoken";
 import { Constants } from "../../utils/config";
-import { retrieveWallet, iobManager, GAS_OPT, provider } from "../../middleware/blockchain";
+import { retrieveWallet, exampleManager, GAS_OPT, provider } from "../../middleware/blockchain";
 import {
   IToken,
   ITokenData,
@@ -37,8 +37,8 @@ export const signUp = async (req: Request, res: Response) => {
     // check if the username is already registered
     // check if from account has a user registered
     const checkPreviousBC = Promise.all([
-      iobManager!.connect((await admin)!).getUserByName(body.username),
-      body.from ? iobManager!.connect(body.from).callStatic.getMyUser() : undefined,
+      exampleManager!.connect((await admin)!).getUserByName(body.username),
+      body.from ? exampleManager!.connect(body.from).callStatic.getMyUser() : undefined,
     ]);
 
     // user DB object
@@ -84,8 +84,8 @@ export const signUp = async (req: Request, res: Response) => {
 
       // No user in DB, create a new one tx
       // -- generate new user unsigned transaction
-      const iobManagerFrom = body.from ? iobManager!.connect(body.from) : iobManager!;
-      const newUserUnsTx = await iobManagerFrom.populateTransaction.newUser(
+      const exampleManagerFrom = body.from ? exampleManager!.connect(body.from) : exampleManager!;
+      const newUserUnsTx = await exampleManagerFrom.populateTransaction.newUser(
         body.username,
         await encHashPass,
         GAS_OPT
@@ -128,7 +128,7 @@ export const login = async (req: Request, res: Response) => {
       result.message = "ERROR: user '" + body.username + "' or password does not match";
       throw new Error(`username '${body.username}' not found in DB`);
     }
-    const userBC = await iobManager!
+    const userBC = await exampleManager!
       .connect((await admin)!)
       .callStatic.getUserByName(body.username);
     const token = createToken(userBC.owner);
@@ -202,8 +202,8 @@ export const registerUser = async (id: string | Bytes, name: string, password: s
     const admin = retrieveWallet(Constants.ADMIN_PATH, Constants.ADMIN_PASSWORD);
     let userDB = ExtUser.findOne({ id: id });
     // call the contract with the admin wallet
-    const iobManagerAdmin = iobManager!.connect((await admin)!);
-    const userBC = iobManagerAdmin.callStatic.getUser(id);
+    const exampleManagerAdmin = exampleManager!.connect((await admin)!);
+    const userBC = exampleManagerAdmin.callStatic.getUser(id);
 
     if ((await userDB) as IExtUser) {
       // User registred in DB

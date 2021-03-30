@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import { iobManager, myToken, toDate, toNumber } from "../../middleware/blockchain";
+import { exampleManager, myToken, toDate, toNumber } from "../../middleware/blockchain";
 import { logClose, logger, logStart } from "../../middleware/logger";
 import ExtUser from "../../models/ExtUser";
 import IUser, { IGetMyUser_req, IGetMyUser_res } from "../../models/User";
@@ -14,7 +14,7 @@ export const getMyUser = async (req: Request, res: Response) => {
 
   try {
 
-    const userBC = iobManager!.callStatic.getMyUser({from: body.senderAccount});
+    const userBC = exampleManager!.callStatic.getMyUser({from: body.senderAccount});
     const tokenBalance = myToken!.callStatic.balanceOf(body.senderAccount);
     // -- check user in DB
     const userDB = ExtUser.findOne({ owner: body.senderAccount });

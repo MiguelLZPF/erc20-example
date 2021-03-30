@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: UNLICENSED
-pragma solidity >=0.6.0 <0.8.0;
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
 pragma experimental ABIEncoderV2;
 
 import {
@@ -8,7 +8,7 @@ import {
 import {
   ProxyAdmin,
   TransparentUpgradeableProxy as TUP
-} from "@openzeppelin/contracts/proxy/ProxyAdmin.sol";
+} from "@openzeppelin/contracts/proxy/transparent/ProxyAdmin.sol";
 import {
   Create2Upgradeable as Create2
 } from "@openzeppelin/contracts-upgradeable/utils/Create2Upgradeable.sol";
@@ -19,6 +19,7 @@ import { Strings as S } from "./Strings.sol";
 * @author Miguel Gomez Carpena
 * @dev This Smart Contract is in charge of deploy and update upgradeable contracts
        for an owner and keeps record of them, and their versions and so on.
+  @notice https://github.com/MiguelLZPF/standard-contract-registry
  */
 contract ContractRegistry is Ownable {
   // ======

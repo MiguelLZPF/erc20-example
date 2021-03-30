@@ -1,13 +1,13 @@
 import { BigNumber, Bytes } from "ethers";
 import { registerUser } from "../services/authentication/controller";
 import { transfer } from "../services/exchange/controller";
-import { ContractRegistry, IobManager, MyToken, ProxyAdmin, Users } from "../typechain";
+import { ContractRegistry, ExampleManager, MyToken, ProxyAdmin, Users } from "../typechain";
 import { logClose, logger, logStart } from "./logger";
 
 export const subscribeEvents = async (
   proxyAdmin: ProxyAdmin,
   contractRegistry: ContractRegistry,
-  iobManager: IobManager,
+  exampleManager: ExampleManager,
   myToken: MyToken,
   users: Users
 ) => {
@@ -15,9 +15,9 @@ export const subscribeEvents = async (
   try {
 
     Promise.all([
-      subsUserCreated(iobManager),
-      //subsDeposit(iobManager),
-      subsTransfer(iobManager)
+      subsUserCreated(exampleManager),
+      //subsDeposit(exampleManager),
+      subsTransfer(exampleManager)
     ])
 
     return true;
@@ -29,23 +29,23 @@ export const subscribeEvents = async (
   }
 };
 
-const subsUserCreated = async (iobManager: IobManager) => {
-  const filter = iobManager.filters.UserCreated(null, null, null);
-  iobManager.on(filter, async (id: string | Bytes, name: string, password: string) => {
+const subsUserCreated = async (exampleManager: ExampleManager) => {
+  const filter = exampleManager.filters.UserCreated(null, null, null);
+  exampleManager.on(filter, async (id, name, password) => {
     await registerUser(id, name, password);
   });
 };
 
-/* const subsDeposit = async (iobManager: IobManager) => {
-  const filter = iobManager.filters.Deposit(null, null);
-  iobManager.on(filter, async (recipient: string, amount: BigNumber) => {
+/* const subsDeposit = async (exampleManager: ExampleManager) => {
+  const filter = exampleManager.filters.Deposit(null, null);
+  exampleManager.on(filter, async (recipient: string, amount: BigNumber) => {
     await deposit(recipient, amount);
   });
 }; */
 
-const subsTransfer = async (iobManager: IobManager) => {
-  const filter = iobManager.filters.Transfer(null, null, null);
-  iobManager.on(filter, async (spender: string, recipient: string, amount: BigNumber) => {
+const subsTransfer = async (exampleManager: ExampleManager) => {
+  const filter = exampleManager.filters.Transfer(null, null, null);
+  exampleManager.on(filter, async (spender, recipient, amount) => {
     await transfer(spender, recipient, amount);
   });
 };
